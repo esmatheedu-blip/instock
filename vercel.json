@@ -1,14 +1,7 @@
 {
   "version": 2,
-  "functions": {
-    "search.js": {
-      "runtime": "@vercel/node@3.0.0"
-    }
-  },
   "routes": [
-    { "src": "/api/search", "dest": "/search.js" },
-    { "src": "/sw.js", "dest": "/sw.js" },
-    { "src": "/manifest.json", "dest": "/manifest.json" },
-    { "src": "/(.*)", "dest": "/index.html" }
+    { "src": "/api/search", "dest": "/api/search.js" },
+    { "src": "/(.*)", "dest": "/public/$1" }
   ]
 }
