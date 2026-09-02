@@ -34,7 +34,12 @@ export default async function handler(req, res) {
     });
 
     if (!response.ok) {
-      return res.status(response.status).json({ error: '네이버 API 오류' });
+      const naverError = await response.text();
+      return res.status(response.status).json({
+        error: '네이버 API 오류',
+        status: response.status,
+        detail: naverError
+      });
     }
 
     const data = await response.json();
