@@ -1,51 +1,69 @@
 export default async function handler(req, res) {
-  // CORS 허용
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'GET, OPTIONS');
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
 
-  if (req.method === 'OPTIONS') {
-    return res.status(200).end();
-  }
+  if (req.method === 'OPTIONS') return res.status(200).end();
 
   const { query } = req.query;
-
   if (!query) {
     return res.status(400).json({ error: 'query 파라미터가 필요합니다' });
   }
 
-  // 키는 Vercel 환경변수에서만 읽음 — 브라우저에 절대 노출 안 됨
-  const clientId     = process.env.NAVER_CLIENT_ID;
-  const clientSecret = process.env.NAVER_CLIENT_SECRET;
-
-  if (!clientId || !clientSecret) {
-    return res.status(500).json({ error: 'API 키가 설정되지 않았습니다' });
+  const apiKey = process.env.GEMINI_API_KEY;
+  if (!apiKey) {
+    return res.status(500).json({ error: 'API key not set' });
   }
 
+  const prompt = `아래 화장품/뷰티 제품 이름을 보고 정보를 알려주세요.
+제품명: "${query}"
+
+반드시 아래 형식으로만 답하세요 (다른 말 금지):
+NAME: 제품 전체 이름 (브랜드명 포함해서 전체 다, 입력값을 정제해서)
+BRAND: 브랜드명만 (제조사/회사명)
+CATEGORY: 스킨/토너/에센스/세럼/크림/로션/미스트/오일/선케어/마스크팩/클렌징/메이크업/네일/헤어케어/바디케어/향수/디퓨저/건강식품/기타 중 하나
+CAPACITY: 이 제품의 일반적인 판매 용량 (예: 50ml, 30g, 200ml). 모르면 빈칸
+
+만약 이 이름이 실제 제품이 아니거나 확신이 없으면:
+NAME: (그대로 입력값)
+BRAND: 
+CATEGORY: 기타
+CAPACITY: `;
+
   try {
-    const encoded = encodeURIComponent(query);
-    const url = `https://openapi.naver.com/v1/search/shop.json?query=${encoded}&display=5`;
+    const r = await fetch(
+      `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${apiKey}`,
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          contents: [{ parts: [{ text: prompt }] }],
+          generationConfig: { temperature: 0.1, maxOutputTokens: 512 }
+        })
+      }
+    );
 
-    const response = await fetch(url, {
-      headers: {
-        'X-Naver-Client-Id':     clientId,
-        'X-Naver-Client-Secret': clientSecret,
-      },
-    });
-
-    if (!response.ok) {
-      const naverError = await response.text();
-      return res.status(response.status).json({
-        error: '네이버 API 오류',
-        status: response.status,
-        detail: naverError
-      });
+    const d = await r.json();
+    if (!r.ok) {
+      return res.status(500).json({ error: 'Gemini error', detail: d });
     }
 
-    const data = await response.json();
-    return res.status(200).json(data);
+    const text = d.candidates?.[0]?.content?.parts?.[0]?.text || '';
 
-  } catch (err) {
-    return res.status(500).json({ error: '서버 오류', detail: err.message });
+    const name = text.match(/NAME:\s*(.+)/i)?.[1]?.trim() || query;
+    const brand = text.match(/BRAND:\s*(.+)/i)?.[1]?.trim() || '';
+    const category = text.match(/CATEGORY:\s*(.+)/i)?.[1]?.trim() || '기타';
+    const capacity = text.match(/CAPACITY:\s*(.+)/i)?.[1]?.trim() || '';
+
+    return res.status(200).json({
+      success: true,
+      name,
+      brand,
+      category,
+      capacity
+    });
+
+  } catch (e) {
+    return res.status(500).json({ error: 'Gemini API error', detail: e.message });
   }
 }
