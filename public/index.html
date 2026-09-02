@@ -1166,28 +1166,24 @@ function updateSetPreview(name){
 async function searchNaver(q){
   const box=document.getElementById('suggest-box');
   box.style.display='block';
-  // 내 제품 섹션은 유지하고 로딩 상태 추가
-  const mineHtml=box.innerHTML; // 이미 내 제품 있으면 보존
+  const mineHtml=box.innerHTML;
   const hasMineSec=mineHtml.includes('suggest-mine');
-  const naverSection=`<div id="naver-suggest-section"><div class="suggest-loading">🔍 네이버 검색 중...</div></div>`;
+  const naverSection=`<div id="naver-suggest-section"><div class="suggest-loading">🤖 AI가 찾는 중...</div></div>`;
   box.innerHTML=(hasMineSec?mineHtml:'')+naverSection;
   try{
     const r=await fetch(`/api/search?query=${encodeURIComponent(q)}`);
     if(!r.ok)throw new Error();
     const d=await r.json();
-    const items=d.items||[];
     const naverEl=document.getElementById('naver-suggest-section');
     if(!naverEl)return;
-    if(!items.length){naverEl.innerHTML='<div class="suggest-loading">네이버 검색 결과 없음</div>';return;}
-    naverEl.innerHTML=`<div class="suggest-section-label">🔍 네이버 쇼핑</div>`
-      +items.slice(0,5).map((item,i)=>{
-        const name=item.title.replace(/<[^>]+>/g,'');
-        const brand=item.brand||item.maker||'';
-        return `<div class="suggest-item" onclick="selectSuggest(${i})" data-name="${esc(name)}" data-brand="${esc(brand)}">
-          <div class="suggest-name">${esc(name)}</div>
-          ${brand?`<div class="suggest-brand">${esc(brand)}</div>`:''}
-        </div>`;
-      }).join('');
+    if(!d.success||!d.name){naverEl.innerHTML='<div class="suggest-loading">AI 인식 결과 없음</div>';return;}
+    naverEl.innerHTML=`<div class="suggest-section-label">🤖 AI 추천</div>`
+      +`<div class="suggest-item" onclick="selectSuggest(0)"
+          data-name="${esc(d.name)}" data-brand="${esc(d.brand||'')}"
+          data-capacity="${esc(d.capacity||'')}" data-category="${esc(d.category||'')}">
+        <div class="suggest-name">${esc(d.name)}</div>
+        ${d.brand||d.capacity?`<div class="suggest-brand">${esc(d.brand||'')}${d.brand&&d.capacity?' · ':''}${esc(d.capacity||'')}</div>`:''}
+      </div>`;
   }catch{
     const naverEl=document.getElementById('naver-suggest-section');
     if(naverEl)naverEl.innerHTML='<div class="suggest-loading">검색 실패 (직접 입력해주세요)</div>';
@@ -1202,9 +1198,15 @@ function selectSuggest(i){
   const name=item.dataset.name;
   document.getElementById('f-name').value=name;
   if(item.dataset.brand)document.getElementById('f-brand').value=item.dataset.brand;
+  if(item.dataset.capacity)document.getElementById('f-capacity').value=item.dataset.capacity;
   hideSuggest();
   updateSetPreview(name);
-  autoDetectCategory(name);
+  if(item.dataset.category){
+    const sel=document.getElementById('f-cat');
+    for(const opt of sel.options){if(opt.value===item.dataset.category){sel.value=item.dataset.category;break;}}
+  }else{
+    autoDetectCategory(name);
+  }
 }
 function hideSuggest(){
   const box=document.getElementById('suggest-box');
