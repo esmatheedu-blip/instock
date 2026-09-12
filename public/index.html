@@ -350,6 +350,7 @@ body{
   -webkit-tap-highlight-color:transparent;
 }
 .memo-date{font-size:11px;color:var(--text3);margin-right:auto}
+.memo-count{font-size:11px;color:var(--text3);text-align:right;margin-top:4px}
 .memo-textarea{
   width:100%;min-height:90px;background:var(--bg);border:1.5px solid var(--border);
   border-radius:12px;padding:10px 12px;font-size:13px;font-family:inherit;
@@ -1804,7 +1805,7 @@ function showToast(msg){
 // ═══════════════════════════════════════
 //  RENDER
 // ═══════════════════════════════════════
-function renderAll(){renderDashboard();renderInventory();renderExpiry();renderHistory();}
+function renderAll(){renderDashboard();renderInventory();renderExpiry();renderHistory();renderMemo();}
 
 function renderDashboard(){
   const expired=products.filter(p=>{const d=daysLeft(p.expiry);return d!==null&&d<0;});
@@ -2321,9 +2322,18 @@ function renderMemo(){
       </div>
       <textarea class="memo-textarea" id="memo-${m.id}"
         placeholder="메모나 리뷰를 자유롭게 적어보세요..."
-        oninput="queueSaveMemo('${m.id}',this.value)">${esc(m.content||'')}</textarea>
+        oninput="queueSaveMemo('${m.id}',this.value);updateMemoCount('${m.id}',this.value)">${esc(m.content||'')}</textarea>
+      <div class="memo-count" id="memo-count-${m.id}">공백 제외 ${charCountNoSpace(m.content||'')}자</div>
     </div>`;
   }).join('');
+}
+
+function charCountNoSpace(s){
+  return String(s||'').replace(/\s/g,'').length;
+}
+function updateMemoCount(id,val){
+  const el=document.getElementById(`memo-count-${id}`);
+  if(el)el.textContent=`공백 제외 ${charCountNoSpace(val)}자`;
 }
 
 async function addMemo(){
