@@ -302,6 +302,55 @@ body{
 .set-item .si-cap{font-weight:600;color:var(--text)}
 .set-item .si-qty{color:var(--text3)}
 
+/* 기획세트 수동 토글 & 구성품 빌더 */
+.set-toggle-row{display:flex;align-items:center;justify-content:space-between;margin-bottom:13px}
+.set-toggle-row .fl{margin-bottom:0}
+.set-toggle-btn{
+  padding:6px 16px;border-radius:20px;border:1.5px solid var(--border);
+  background:var(--surface);color:var(--text3);font-size:12px;font-weight:700;
+  cursor:pointer;font-family:inherit;transition:all .2s;-webkit-tap-highlight-color:transparent;
+  min-width:52px;text-align:center;
+}
+.set-toggle-btn.on{background:var(--accent);border-color:var(--accent);color:#fff}
+.set-builder{margin-bottom:13px}
+.set-builder-row{display:flex;gap:6px;margin-bottom:8px;align-items:center}
+.set-builder-row .fi{padding:9px 12px;font-size:13px}
+.set-builder-row .set-row-exp{width:92px;flex:none;text-align:center;padding:9px 4px;font-size:12px}
+.set-row-del{
+  flex-shrink:0;width:32px;height:32px;border-radius:8px;border:none;
+  background:#ffe5e5;color:var(--red);font-size:14px;cursor:pointer;
+  display:flex;align-items:center;justify-content:center;-webkit-tap-highlight-color:transparent;
+}
+.set-add-row-btn{
+  background:var(--surface2);color:var(--accent);border:1.5px dashed var(--accent2);
+  border-radius:12px;padding:9px;font-size:13px;font-weight:700;width:100%;
+  cursor:pointer;font-family:inherit;-webkit-tap-highlight-color:transparent;
+}
+
+/* 메모장 */
+.memo-list{display:flex;flex-direction:column;gap:10px}
+.memo-card{
+  background:var(--surface);border-radius:var(--r);padding:14px 16px;
+  box-shadow:var(--shadow);border:1px solid var(--border);
+}
+.memo-card-head{display:flex;justify-content:space-between;align-items:center;gap:8px;margin-bottom:8px}
+.memo-card-name{font-size:14px;font-weight:600;color:var(--text);
+  overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-width:0}
+.memo-copy-btn{
+  flex-shrink:0;background:var(--surface2);color:var(--accent);
+  border:1.5px solid var(--border);border-radius:8px;padding:5px 10px;
+  font-size:12px;font-weight:700;cursor:pointer;font-family:inherit;
+  -webkit-tap-highlight-color:transparent;
+}
+.memo-copy-btn:active{background:var(--border)}
+.memo-textarea{
+  width:100%;min-height:90px;background:var(--bg);border:1.5px solid var(--border);
+  border-radius:12px;padding:10px 12px;font-size:13px;font-family:inherit;
+  color:var(--text);outline:none;resize:vertical;transition:border .2s;
+  -webkit-appearance:none;
+}
+.memo-textarea:focus{border-color:var(--accent2);background:#fff}
+
 /* 사용기록 */
 .history-item{
   background:var(--surface);border-radius:var(--r);padding:12px 16px;
@@ -465,6 +514,7 @@ body{
   <div class="tab"        onclick="switchTab('inventory',this)">📦 재고목록</div>
   <div class="tab"        onclick="switchTab('expiry',this)"   >⏰ 유통기한</div>
   <div class="tab"        onclick="switchTab('history',this)"  >📋 사용기록</div>
+  <div class="tab"        onclick="switchTab('memo',this)"      >📝 메모장</div>
 </div>
 
 <div class="main">
@@ -565,6 +615,15 @@ body{
     <div class="section-title">📋 사용 완료 기록</div>
     <div class="product-list" id="history-list"></div>
   </div>
+
+  <div id="tab-memo" style="display:none">
+    <div class="search-row">
+      <input class="search-input" id="memo-search" type="text"
+        placeholder="🔍 제품명, 브랜드 검색..." oninput="renderMemo()">
+    </div>
+    <button class="btn btn-primary" style="margin-bottom:14px" onclick="copyAllMemos()">📋 모두 복사하기</button>
+    <div class="memo-list" id="memo-list"></div>
+  </div>
 </div>
 
 <button class="fab" onclick="openModal()">+</button>
@@ -589,22 +648,35 @@ body{
         autocomplete="off">
       <div class="suggest-box" id="suggest-box" style="display:none"></div>
       <div class="set-preview" id="set-preview">
-        <div class="set-preview-title">🎁 기획세트 감지됨 — 아래처럼 배치 분리돼요</div>
+        <div class="set-preview-title">📦 기존 배치 구성</div>
         <div class="set-items" id="set-items"></div>
       </div>
     </div>
 
-    <div class="fi-row">
+    <div class="fg set-toggle-row">
+      <label class="fl">🎁 기획세트로 등록</label>
+      <button type="button" class="set-toggle-btn" id="set-toggle-btn" onclick="toggleSetMode()">OFF</button>
+    </div>
+    <div class="set-builder" id="set-builder" style="display:none">
+      <div class="set-toggle-row">
+        <label class="fl">📅 유통기한 동일 적용</label>
+        <button type="button" class="set-toggle-btn" id="exp-sync-toggle-btn" onclick="toggleExpirySync()">OFF</button>
+      </div>
+      <div id="set-builder-rows"></div>
+      <button type="button" class="set-add-row-btn" onclick="addSetRow()">+ 구성품 추가</button>
+    </div>
+
+    <div class="fi-row" id="row-brand-capacity">
       <div class="fg">
         <label class="fl">브랜드</label>
         <input class="fi" id="f-brand" type="text" placeholder="예: 이니스프리">
       </div>
-      <div class="fg">
+      <div class="fg" id="fg-capacity">
         <label class="fl">용량</label>
         <input class="fi" id="f-capacity" type="text" placeholder="예: 50ml, 30g">
       </div>
     </div>
-    <div class="fi-row">
+    <div class="fi-row" id="row-cat-qty">
       <div class="fg">
         <label class="fl">카테고리</label>
         <select class="fi fi-sel" id="f-cat">
@@ -639,13 +711,13 @@ body{
           </optgroup>
         </select>
       </div>
-      <div class="fg">
+      <div class="fg" id="fg-qty">
         <label class="fl">수량</label>
         <input class="fi" id="f-qty" type="number" inputmode="numeric" min="1" value="1">
       </div>
     </div>
-    <div class="fi-row">
-      <div class="fg">
+    <div class="fi-row" id="row-expiry-note">
+      <div class="fg" id="fg-expiry-single">
         <label class="fl">유통기한</label>
         <input class="fi" id="f-expiry" type="text" placeholder="26.08.15" maxlength="10"
           oninput="autoFormatDate(this)" inputmode="numeric">
@@ -1031,8 +1103,15 @@ let _composing=false;
 
 function onNameInput(val){
   hideSuggest();
-  updateSetPreview(val);
   autoDetectCategory(val);
+  // 용량 자동 채우기 (기획세트 모드가 아니고, 필드가 비어있을 때만)
+  if(!setMode){
+    const capEl=document.getElementById('f-capacity');
+    if(capEl&&!capEl.value){
+      const autoCap=extractCapacityFromName(val);
+      if(autoCap)capEl.value=autoCap;
+    }
+  }
   clearTimeout(nameTimer);
   if(val.trim().length<2)return;
   // 내 등록 제품 즉시 표시
@@ -1141,54 +1220,92 @@ function selectMyProduct(id){
       </div>`
     ).join('');
   } else {
-    updateSetPreview(p.name);
+    preview.classList.remove('show');
   }
 
   showToast(`'${p.name}' 선택됨 — 유통기한/수량 입력 후 추가하면 배치로 들어가요 ✅`);
 }
 
-function updateSetPreview(name){
-  const preview=document.getElementById('set-preview');
-  const itemsEl=document.getElementById('set-items');
-  // f-name 전체값을 titleName으로 전달 (본품 용량 추출에 활용)
-  const titleName=document.getElementById('f-name')?.value||'';
-  let set=parseSetProduct(name, titleName);
-  if(!set){
-    const capVal=document.getElementById('f-capacity').value.trim();
-    if(capVal) set=parseSetProduct(capVal, titleName);
-  }
-  if(!set){
-    preview.classList.remove('show');
-    // 기획세트 아닌 경우: 제목에서 용량 자동 추출해서 용량 필드 채우기
-    const capEl=document.getElementById('f-capacity');
-    if(!capEl.value){
-      const autoCap=extractCapacityFromName(name);
-      if(autoCap) capEl.value=autoCap;
+// ═══════════════════════════════════════
+//  기획세트 수동 토글 & 구성품 빌더
+// ═══════════════════════════════════════
+let setMode=false;
+let expirySyncMode=false;
+
+function setSetMode(on){
+  setMode=on;
+  const btn=document.getElementById('set-toggle-btn');
+  const builder=document.getElementById('set-builder');
+  const fgCap=document.getElementById('fg-capacity');
+  const fgQty=document.getElementById('fg-qty');
+  const rowBC=document.getElementById('row-brand-capacity');
+  const rowCQ=document.getElementById('row-cat-qty');
+  const fgExpSingle=document.getElementById('fg-expiry-single');
+  btn.textContent=on?'ON':'OFF';
+  btn.classList.toggle('on',on);
+  builder.style.display=on?'block':'none';
+  fgCap.style.display=on?'none':'';
+  fgQty.style.display=on?'none':'';
+  rowBC.style.gridTemplateColumns=on?'1fr':'';
+  rowCQ.style.gridTemplateColumns=on?'1fr':'';
+  if(fgExpSingle)fgExpSingle.style.display=on?'none':'';
+
+  document.getElementById('set-builder-rows').innerHTML='';
+  expirySyncMode=false;
+  const syncBtn=document.getElementById('exp-sync-toggle-btn');
+  if(syncBtn){syncBtn.textContent='OFF';syncBtn.classList.remove('on');}
+
+  if(on){
+    // 제품명에 +/* 기호가 있으면 용량을 자동으로 분류해서 구성품에 채워줌
+    const name=document.getElementById('f-name').value.trim();
+    const detected=extractSetCapacities(name);
+    if(detected&&detected.length>=2){
+      detected.forEach(cap=>addSetRow(cap));
+      showToast(`🎁 제품명에서 구성 ${detected.length}개를 자동으로 채웠어요`);
+    }else{
+      addSetRow(); addSetRow();
     }
-    return;
   }
-  preview.classList.add('show');
-  // 기획세트 여부에 따라 제목 다르게 표시
-  const isSimpleSet=set.length===1&&set[0].isSet;
-  const previewTitle=document.querySelector('.set-preview-title');
-  if(set.length===1&&(set[0].capacity==='1+1'||(/1\+1/.test(name)&&set[0].isSet))){
-    previewTitle.textContent='🎁 1+1 감지됨 — 2개 배치로 저장돼요';
-  } else if(isSimpleSet){
-    previewTitle.textContent='🎁 기획세트 감지됨';
-  } else {
-    previewTitle.textContent=`🎁 기획세트 감지됨 — ${set.length}가지 구성으로 배치 분리돼요`;
+}
+function toggleSetMode(){ setSetMode(!setMode); }
+
+// 유통기한 동일 적용 토글: ON이면 구성품 중 하나를 입력하면 나머지도 같은 값으로 자동완성
+function toggleExpirySync(){
+  expirySyncMode=!expirySyncMode;
+  const btn=document.getElementById('exp-sync-toggle-btn');
+  btn.textContent=expirySyncMode?'ON':'OFF';
+  btn.classList.toggle('on',expirySyncMode);
+  if(expirySyncMode){
+    const rows=[...document.querySelectorAll('#set-builder-rows .set-row-exp')];
+    const filled=rows.find(r=>r.value.trim());
+    if(filled)rows.forEach(r=>r.value=filled.value);
   }
-  itemsEl.innerHTML=set.map(s=>
-    `<div class="set-item">
-      <span class="si-cap">📦 ${esc(s.capacity||'?')}</span>
-      <span class="si-qty">× ${s.qty}개</span>
-    </div>`
-  ).join('');
-  // 용량 필드 자동 채우기 (단일 용량인 경우)
-  if(set.length===1){
-    const capEl=document.getElementById('f-capacity');
-    if(!capEl.value&&set[0].capacity&&set[0].capacity!=='기획세트'&&set[0].capacity!=='1+1')
-      capEl.value=set[0].capacity;
+}
+function syncSetRowExpiry(input){
+  if(!expirySyncMode)return;
+  const v=input.value;
+  document.querySelectorAll('#set-builder-rows .set-row-exp').forEach(r=>{
+    if(r!==input)r.value=v;
+  });
+}
+
+function addSetRow(label,expiry){
+  const wrap=document.getElementById('set-builder-rows');
+  const row=document.createElement('div');
+  row.className='set-builder-row';
+  row.innerHTML=`
+    <input class="fi set-row-label" type="text" placeholder="예: 본품 300ml, 스틱 30ml">
+    <input class="fi set-row-exp" type="text" placeholder="26.08.15" maxlength="10" inputmode="numeric"
+      oninput="autoFormatDate(this);syncSetRowExpiry(this)">
+    <button type="button" class="set-row-del" onclick="this.closest('.set-builder-row').remove()">✕</button>
+  `;
+  if(label!==undefined) row.querySelector('.set-row-label').value=label;
+  if(expiry!==undefined) row.querySelector('.set-row-exp').value=formatDateDisplay(expiry)||'';
+  wrap.appendChild(row);
+  if(expirySyncMode){
+    const rows=[...document.querySelectorAll('#set-builder-rows .set-row-exp')];
+    const filled=rows.find(r=>r.value.trim());
+    if(filled)rows.forEach(r=>r.value=filled.value);
   }
 }
 
@@ -1229,7 +1346,6 @@ function selectSuggest(i){
   if(item.dataset.brand)document.getElementById('f-brand').value=item.dataset.brand;
   if(item.dataset.capacity)document.getElementById('f-capacity').value=item.dataset.capacity;
   hideSuggest();
-  updateSetPreview(name);
   if(item.dataset.category){
     const sel=document.getElementById('f-cat');
     for(const opt of sel.options){if(opt.value===item.dataset.category){sel.value=item.dataset.category;break;}}
@@ -1325,6 +1441,7 @@ function closeModal(){
   document.getElementById('f-qty').value=1;
   document.getElementById('f-expiry').value='';
   document.getElementById('set-preview').classList.remove('show');
+  setSetMode(false);
 }
 document.getElementById('modal').addEventListener('click',e=>{
   if(e.target===document.getElementById('modal'))closeModal();
@@ -1379,60 +1496,50 @@ async function addProduct(){
     }
   }
 
-  // 기획세트 감지 (제품명 전체를 titleName으로도 전달해 본품 용량 추출)
-  const setItems=parseSetProduct(name, name);
+  // ── 기획세트 모드 (수동 토글 + 구성품 빌더) ──
+  if(setMode){
+    const rows=[...document.querySelectorAll('#set-builder-rows .set-builder-row')];
+    const setItems=rows.map(r=>{
+      const cap=(r.querySelector('.set-row-label')?.value||'').trim();
+      const rowExpiry=parseDateInput(r.querySelector('.set-row-exp')?.value||'');
+      return {capacity:cap, expiry:rowExpiry||expiry};
+    }).filter(it=>it.capacity);
 
-  // 용량 자동 인식 (기획세트 아닐 때, 용량 필드 비어있으면 이름에서 추출)
-  let finalCapacityInput=capacity||extractCapacityFromName(name);
-
-  if(setItems){
-    // isSet=true (기획세트 키워드) 는 배치 분리 없이 단순 태그만
-    if(setItems.length===1&&setItems[0].isSet){
-      const p2={
-        barcode:'',name,brand,category,
-        capacity:finalCapacityInput||setItems[0].capacity,
-        expiry,qty,note,
-        batches:[{id:'b_'+Date.now()+Math.random().toString(36).slice(2),expiry,qty}],
-        addedAt:Date.now(),isSet:true
-      };
-      const existing=products.find(x=>(x.name||'').trim()===name&&(x.brand||'').trim()===brand);
-      if(existing){
-        const batches=[...getBatches(existing),{id:'b_'+Date.now()+Math.random().toString(36).slice(2),expiry,qty}];
-        const totalQty=batches.reduce((s,b)=>s+(b.qty||0),0);
-        await dbUpdate(existing.id,{batches,qty:totalQty,expiry:earliestExpiry(batches)});
-        closeModal();renderAll();showToast(`🎁 기획세트 배치 추가됨! ✨`);
-      }else{
-        await dbAdd(p2);closeModal();renderAll();showToast(`🎁 기획세트 '${name}' 추가됐어요 ✨`);
-      }
-      btn.innerHTML='추가하기';btn.disabled=false;return;
+    if(setItems.length<2){
+      showToast('구성품을 2개 이상 입력해주세요');
+      btn.innerHTML='추가하기';btn.disabled=false;
+      return;
     }
 
-    const baseName=getBaseName(name)||name;
-    const batches=makeSetBatches(setItems,expiry);
+    const batches=setItems.map(s=>({
+      id:'b_'+Date.now()+Math.random().toString(36).slice(2)+'_'+Math.random().toString(36).slice(2),
+      expiry:s.expiry,
+      qty:1,
+      capacity:s.capacity,
+      label:s.capacity
+    }));
     const totalQty=batches.length;
-    const finalCapacity=setItems.length===1?setItems[0].capacity:setItems.map(s=>`${s.capacity}×${s.qty}`).join('+');
+    const finalCapacity=setItems.map(s=>s.capacity).join('+');
+    const earliest=earliestExpiry(batches);
 
-    const existing=products.find(x=>
-      ((x.name||'').trim()===baseName || (x.name||'').trim()===name.trim())
-      &&(x.brand||'').trim()===brand
-    );
+    const existing=products.find(x=>(x.name||'').trim()===name&&(x.brand||'').trim()===brand);
     if(existing){
       const existBatches=[...getBatches(existing),...batches];
       const newTotal=existBatches.reduce((s,b)=>s+(b.qty||0),0);
       await dbUpdate(existing.id,{batches:existBatches,qty:newTotal,expiry:earliestExpiry(existBatches)});
       closeModal();renderAll();
-      showToast(`🎁 기획세트 ${totalQty}개 배치 추가됐어요! ✨`);
+      showToast(`🎁 기획세트 배치 ${totalQty}개 추가됐어요! ✨`);
     }else{
-      const p2={barcode:'',name:baseName,brand,category,capacity:finalCapacity,expiry,qty:totalQty,note,batches,addedAt:Date.now()};
+      const p2={barcode:'',name,brand,category,capacity:finalCapacity,expiry:earliest,qty:totalQty,note,batches,isSet:true,addedAt:Date.now()};
       await dbAdd(p2);closeModal();renderAll();
-      showToast(`🎁 기획세트 감지! ${baseName} — ${totalQty}개 배치로 저장됐어요 ✨`);
+      showToast(`🎁 기획세트 '${name}' — ${totalQty}개 배치로 저장됐어요 ✨`);
     }
     btn.innerHTML='추가하기';btn.disabled=false;
     return;
   }
 
   // 일반 제품 (용량 자동 인식 적용)
-  const capacityFinal=finalCapacityInput;
+  const capacityFinal=capacity||extractCapacityFromName(name);
   const existing=products.find(x=>
     (x.name||'').trim()===name && (x.brand||'').trim()===brand
   );
@@ -1555,24 +1662,6 @@ async function addBatchToProduct(id){
   showToast('배치가 추가됐어요 ✨');
 }
 
-// 기획세트 배치 생성: 항상 qty:1 개씩 개수만큼 생성
-function makeSetBatches(setItems, expiry){
-  const batches=[];
-  setItems.forEach(s=>{
-    for(let i=0;i<s.qty;i++){
-      batches.push({
-        id:'b_'+Date.now()+Math.random().toString(36).slice(2)+'_'+i,
-        expiry,
-        qty:1,
-        capacity:s.capacity,
-        label:s.capacity
-      });
-    }
-  });
-  return batches;
-}
-
-
 function getBatches(p){
   if(p.batches&&p.batches.length)return [...p.batches.map(b=>({...b}))];
   return [{id:'b0_'+p.id,expiry:p.expiry||'',qty:p.qty||1}];
@@ -1599,222 +1688,6 @@ function autoFormatDate(input){
   input.value=v;
 }
 
-// ═══════════════════════════════════════
-//  기획세트 파싱 (최종 강화판)
-// ═══════════════════════════════════════
-// 지원 패턴:
-//   숫자용량: "50ml+50ml", "50ml×2", "30g*2", "150ml+50ml+30ml", "220ml×1+80ml×1"
-//   품목명형: "본품 300ml+스틱 30ml 3개+15ml 스틱 2개", "본품+15ml+스틱 3개"
-//   키워드:   "기획세트", "증정기획", "1+1", "2종", "N개입"
-// 반환: [{capacity, qty, isSet?}, ...] 또는 null
-function parseSetProduct(name, titleName){
-  if(!name)return null;
-  const fullText=(titleName||'')+' '+name;
-  const UNIT='(?:ml|ML|mL|g|G|oz|l|L|mg|캡슐|정|매|ea|EA|pc|pcs)';
-  const ITEM_TOKENS=/본품|정품|스틱|미니어처|미니|크림|세럼|토너|앰플|에센스|마스크|클렌징|파우치|파우더|로션|오일|미스트|패드|버블|폼|선크림|아이크림|넥크림|립밤|샴푸|트리트먼트|컨디셔너/;
-
-  // ── 방법-P (최최우선): 괄호 "(품목명)" 형식 파싱 ──
-  // "클렌징오일 100ml + (수딩크림) 25ml" → [{클렌징오일 100ml, qty:1}, {수딩크림 25ml, qty:1}]
-  // "(수딩크림) 25ml×2 + 100ml" 같은 복합도 처리
-  {
-    // 괄호가 있는 파트가 하나라도 있으면 진입
-    const hasParen=name.includes('(') || name.includes('（');
-    if(hasParen){
-      const plusParts=name.split(/(?<!\d)\+(?!\d)|&|＋/);
-      if(plusParts.length>=2){
-        const items=[];
-        for(const part of plusParts){
-          const p=part.trim();
-          if(!p)continue;
-          // 괄호 속 품목명 추출: "(수딩크림)" or "（수딩크림）"
-          const parenM=/[（(]([^）)]+)[）)]\s*(.*)|^(.*?)\s*[（(]([^）)]+)[）)](.*)$/.exec(p);
-          const labelFromParen=parenM?(parenM[1]||parenM[4]||'').trim():null;
-          const restText=parenM?(parenM[2]!==undefined?parenM[2]:(parenM[3]||'')+' '+(parenM[5]||'')).trim():p;
-
-          // 괄호 없는 파트는 기존 방식으로 라벨 없이 처리
-          const volM=new RegExp(`(\\d+(?:\\.\\d+)?)\\s*(${UNIT})`,'i').exec(restText||p);
-          const multiM=new RegExp(`(\\d+(?:\\.\\d+)?)\\s*(${UNIT})\\s*[×x\\*]\\s*(\\d+)`,'i').exec(restText||p);
-
-          if(multiM){
-            const cap=labelFromParen
-              ? `${multiM[1]}${multiM[2].toLowerCase()}(${labelFromParen})`
-              : `${multiM[1]}${multiM[2].toLowerCase()}`;
-            items.push({capacity:cap, qty:parseInt(multiM[3])});
-          } else if(volM){
-            const cap=labelFromParen
-              ? `${volM[1]}${volM[2].toLowerCase()}(${labelFromParen})`
-              : `${volM[1]}${volM[2].toLowerCase()}`;
-            items.push({capacity:cap, qty:1});
-          } else if(labelFromParen){
-            items.push({capacity:labelFromParen, qty:1});
-          }
-        }
-        if(items.length>=2) return items;
-      }
-    }
-  }
-
-  // ── 방법A (최우선): "+" 구분자 파트에 품목명 토큰이 있으면 품목명 혼합 파싱 ──
-  // "본품 300ml + 스틱 30ml 3개 + 15ml 스틱 2개" 같은 패턴 처리
-  {
-    const plusParts=name.split(/(?<!\d)\+(?!\d)|&|＋/);
-    if(plusParts.length>=2){
-      // 파트 중 하나라도 품목명 토큰이 있으면 방법A 진입
-      const hasMixed=plusParts.some(p=>ITEM_TOKENS.test(p));
-      if(hasMixed){
-        const items=[];
-        for(const part of plusParts){
-          const p=part.trim();
-          if(!p)continue;
-          // [증정기획] 같은 괄호 태그 스킵
-          if(/^\[.*\]$/.test(p)||/^\(.*\)$/.test(p)) continue;
-
-          // ① 품목명 + 용량 + N개: "스틱 30ml 3개"
-          const tokVolGaeM=new RegExp(`(${ITEM_TOKENS.source})\\s*(\\d+(?:\\.\\d+)?)\\s*(${UNIT})\\s*(\\d+)\\s*개`,'i').exec(p);
-          if(tokVolGaeM){
-            const cap=`${tokVolGaeM[2]}${tokVolGaeM[3].toLowerCase()}(${tokVolGaeM[1]})`;
-            items.push({capacity:cap,qty:parseInt(tokVolGaeM[4])});
-            continue;
-          }
-          // ② 용량 + 품목명 + N개: "15ml 스틱 2개"
-          const volTokGaeM=new RegExp(`(\\d+(?:\\.\\d+)?)\\s*(${UNIT})\\s*(${ITEM_TOKENS.source})\\s*(\\d+)\\s*개`,'i').exec(p);
-          if(volTokGaeM){
-            const cap=`${volTokGaeM[1]}${volTokGaeM[2].toLowerCase()}(${volTokGaeM[3]})`;
-            items.push({capacity:cap,qty:parseInt(volTokGaeM[4])});
-            continue;
-          }
-          // ③ 품목명 + N개: "스틱 3개"
-          const tokGaeM=new RegExp(`(${ITEM_TOKENS.source})\\s*(\\d+)\\s*개`,'i').exec(p);
-          if(tokGaeM){
-            items.push({capacity:tokGaeM[1].trim(),qty:parseInt(tokGaeM[2])});
-            continue;
-          }
-          // ④ 품목명 + 용량: "본품 300ml", "스틱 30ml"
-          const tokVolM=new RegExp(`(${ITEM_TOKENS.source})\\s*(\\d+(?:\\.\\d+)?)\\s*(${UNIT})`,'i').exec(p);
-          if(tokVolM){
-            const cap=`${tokVolM[2]}${tokVolM[3].toLowerCase()}(${tokVolM[1]})`;
-            items.push({capacity:cap,qty:1});
-            continue;
-          }
-          // ⑤ 용량 + 품목명: "15ml 스틱"
-          const volTokM=new RegExp(`(\\d+(?:\\.\\d+)?)\\s*(${UNIT})\\s*(${ITEM_TOKENS.source})`,'i').exec(p);
-          if(volTokM){
-            const cap=`${volTokM[1]}${volTokM[2].toLowerCase()}(${volTokM[3]})`;
-            items.push({capacity:cap,qty:1});
-            continue;
-          }
-          // ⑥ 용량만: "15ml"
-          const volM=new RegExp(`(\\d+(?:\\.\\d+)?)\\s*(${UNIT})`,'i').exec(p);
-          if(volM){
-            items.push({capacity:`${volM[1]}${volM[2].toLowerCase()}`,qty:1});
-            continue;
-          }
-          // ⑦ 품목명만: "본품", "스틱"
-          if(ITEM_TOKENS.test(p)){
-            const nJongM=/(\d+)\s*종/.exec(p);
-            const qty=nJongM?parseInt(nJongM[1]):1;
-            const label=p.replace(/\s*\d+\s*종/g,'').replace(/\[.*?\]/g,'').trim()||p.trim();
-            items.push({capacity:label,qty});
-            continue;
-          }
-          // ⑧ 짧은 한글 단어
-          if(/^[가-힣]{1,8}$/.test(p.replace(/\s/g,''))){
-            items.push({capacity:p.trim(),qty:1});
-          }
-        }
-        if(items.length>=2){
-          // "본품"/"정품" 레이블이 있으면 제목에서 본품 용량 채우기
-          const titleVolReg=new RegExp(`(\\d+(?:\\.\\d+)?)\\s*(${UNIT})`,'gi');
-          const titleVols=[...fullText.matchAll(titleVolReg)].map(m=>`${m[1]}${m[2].toLowerCase()}`);
-          items.forEach(item=>{
-            if(item.capacity==='본품'||item.capacity==='정품'){
-              const usedVols=items.filter(i=>i!==item).map(i=>i.capacity);
-              const mainVol=titleVols.find(v=>!usedVols.includes(v));
-              if(mainVol) item.capacity=mainVol+'(본품)';
-            }
-          });
-          return items;
-        }
-      }
-    }
-  }
-
-  // ── 방법0: "용량×숫자+용량×숫자" 혼합 (220ml×1+80ml×1) ──
-  const mixedReg=new RegExp(`(\\d+(?:\\.\\d+)?)\\s*(${UNIT})\\s*[×x\\*]\\s*(\\d+)`,'gi');
-  const mixedMatches=[...name.matchAll(mixedReg)];
-  if(mixedMatches.length>=2){
-    const result=[];
-    for(const m of mixedMatches){
-      const cap=`${m[1]}${m[2].toLowerCase()}`;
-      const qty=parseInt(m[3]);
-      if(qty>0) result.push({capacity:cap,qty});
-    }
-    if(result.length>=2) return result;
-  }
-
-  // ── 방법1: "용량+용량+..." 연속 숫자용량 패턴 ──
-  const setBlockReg=new RegExp(
-    `(\\d+(?:\\.\\d+)?\\s*${UNIT}\\s*(?:[+×x\\*]\\s*\\d+(?:\\.\\d+)?\\s*${UNIT}\\s*)+)`,'gi');
-  const setMatch=setBlockReg.exec(name);
-  if(setMatch){
-    const block=setMatch[1];
-    const itemReg=new RegExp(`(\\d+(?:\\.\\d+)?)\\s*(${UNIT})`,'gi');
-    const caps=[];let im;
-    while((im=itemReg.exec(block))!==null) caps.push(`${im[1]}${im[2].toLowerCase()}`);
-    if(caps.length>=2){
-      const grouped={};
-      caps.forEach(c=>{grouped[c]=(grouped[c]||0)+1;});
-      return Object.entries(grouped).map(([cap,qty])=>({capacity:cap,qty}));
-    }
-  }
-
-  // ── 방법2: "용량×숫자" 단일 (50ml×2) ──
-  const multiReg=new RegExp(`(\\d+(?:\\.\\d+)?)\\s*(${UNIT})\\s*[×x\\*]\\s*(\\d+)`,'i');
-  const multiMatch=multiReg.exec(name);
-  if(multiMatch){
-    const cap=`${multiMatch[1]}${multiMatch[2].toLowerCase()}`;
-    const qty=parseInt(multiMatch[3]);
-    if(qty>=2)return[{capacity:cap,qty}];
-  }
-
-  // ── 방법3: "1+1" ──
-  if(/\b1\s*\+\s*1\b/i.test(name)){
-    const capMatch=new RegExp(`(\\d+(?:\\.\\d+)?)\\s*(${UNIT})`,'i').exec(name);
-    const cap=capMatch?`${capMatch[1]}${capMatch[2].toLowerCase()}`:'';
-    return[{capacity:cap||'1+1',qty:2,isSet:true}];
-  }
-
-  // ── 방법5: "기획세트/증정기획/스페셜세트" 키워드 ──
-  if(/기획\s*세트|증정\s*기획|기획팩|스페셜\s*세트|special\s*set/i.test(name)){
-    const capMatch=new RegExp(`(\\d+(?:\\.\\d+)?)\\s*(${UNIT})`,'i').exec(name);
-    if(capMatch) return[{capacity:`${capMatch[1]}${capMatch[2].toLowerCase()}`,qty:1,isSet:true}];
-    return[{capacity:'기획세트',qty:1,isSet:true}];
-  }
-
-  // ── 방법6: "N종" (N>=2) ──
-  const nJongM=/(\d+)\s*종/.exec(name);
-  if(nJongM&&parseInt(nJongM[1])>=2){
-    const qty=parseInt(nJongM[1]);
-    const capMatch=new RegExp(`(\\d+(?:\\.\\d+)?)\\s*(${UNIT})`,'i').exec(name);
-    const cap=capMatch?`${capMatch[1]}${capMatch[2].toLowerCase()}`:'';
-    return[{capacity:cap||`${qty}종`,qty,isSet:true}];
-  }
-
-  // ── 방법7: "N개입/N개세트" (N>=2) ──
-  const nGaeReg=/(\d+)\s*개(?:입|세트|묶음)/;
-  const nGaeMatch=nGaeReg.exec(name);
-  if(nGaeMatch){
-    const qty=parseInt(nGaeMatch[1]);
-    if(qty>=2){
-      const capMatch=new RegExp(`(\\d+(?:\\.\\d+)?)\\s*(${UNIT})`,'i').exec(name);
-      const cap=capMatch?`${capMatch[1]}${capMatch[2].toLowerCase()}`:'';
-      if(cap) return[{capacity:cap,qty}];
-    }
-  }
-
-  return null;
-}
-
 // 제목에서 단독 용량 자동 추출 (기획세트가 아닐 때)
 // 예: "아이오페 레티놀 에센스 50ml" → "50ml"
 function extractCapacityFromName(name){
@@ -1825,12 +1698,23 @@ function extractCapacityFromName(name){
   return m?`${m[1]}${m[2].toLowerCase()}`:'';
 }
 
-// 이름에서 세트 블록 제거한 베이스 이름 추출
-function getBaseName(name){
-  return name
-    .replace(/\s*\d+(?:\.\d+)?\s*(?:ml|ML|mL|g|G|oz|l|L|mg|캡슐|정|매|개|ea|pc|pcs)\s*[+×x\*]\s*\d+(?:\.\d+)?\s*(?:ml|ML|mL|g|G|oz|l|L|mg|캡슐|정|매|개|ea|pc|pcs)(?:\s*[+×x\*]\s*\d+(?:\.\d+)?\s*(?:ml|ML|mL|g|G|oz|l|L|mg|캡슐|정|매|개|ea|pc|pcs))*/gi,'')
-    .replace(/\s*\d+(?:\.\d+)?\s*(?:ml|ML|mL|g|G|oz|l|L|mg|캡슐|정|매|개|ea|pc|pcs)\s*[×x\*]\s*\d+/gi,'')
-    .replace(/\s+/g,' ').trim();
+// ═══════════════════════════════════════
+//  기획세트 구성품 용량 자동 분류 (수동 토글 ON 시에만 동작)
+// ═══════════════════════════════════════
+// 제품명에 + 또는 * 기호로 이어진 용량이 있으면 각 구성품 용량을 배열로 추출
+// 예: "1+1 50ml+2g" → ["50ml","2g"]   /   "본품 30ml*2ea" → ["30ml","2ea"]
+function extractSetCapacities(name){
+  if(!name)return null;
+  const UNIT='(?:ml|ML|mL|g|G|kg|KG|mg|MG|l|L|oz|OZ|매|정|캡슐|포|개|ea|EA)';
+  const blockReg=new RegExp(
+    `\\d+(?:\\.\\d+)?\\s*${UNIT}\\s*(?:[+*]\\s*\\d+(?:\\.\\d+)?\\s*${UNIT}\\s*)+`,'i');
+  const blockMatch=blockReg.exec(name);
+  if(!blockMatch)return null;
+  const block=blockMatch[0];
+  const itemReg=new RegExp(`(\\d+(?:\\.\\d+)?)\\s*(${UNIT})`,'gi');
+  const caps=[];let im;
+  while((im=itemReg.exec(block))!==null) caps.push(`${im[1]}${im[2].toLowerCase()}`);
+  return caps.length>=2?caps:null;
 }
 
 // 날짜 유틸: "26.08.15" / "260815" / "2026-08-15" 등 → "YYYY-MM-DD"
@@ -2361,13 +2245,77 @@ async function undoUsage(historyId){
 }
 
 function switchTab(tab,el){
-  ['dashboard','inventory','expiry','history'].forEach(t=>
+  ['dashboard','inventory','expiry','history','memo'].forEach(t=>
     document.getElementById('tab-'+t).style.display=t===tab?'':'none');
   document.querySelectorAll('.tab').forEach(t=>t.classList.remove('active'));
   el.classList.add('active');
   if(tab==='inventory')renderInventory();
   if(tab==='expiry')renderExpiry();
   if(tab==='history')renderHistory();
+  if(tab==='memo')renderMemo();
+}
+
+// ═══════════════════════════════════════
+//  메모장 (제품별 리뷰/메모, 개별 저장 + 복사)
+// ═══════════════════════════════════════
+const _memoTimers={};
+
+function renderMemo(){
+  const q=(document.getElementById('memo-search')?.value||'').trim().toLowerCase();
+  const list=[...products]
+    .filter(p=>!q||(p.name||'').toLowerCase().includes(q)||(p.brand||'').toLowerCase().includes(q))
+    .sort((a,b)=>(a.name||'').localeCompare(b.name||'','ko'));
+  const el=document.getElementById('memo-list');
+  el.innerHTML=list.length?list.map(p=>`
+    <div class="memo-card">
+      <div class="memo-card-head">
+        <span class="memo-card-name">${EMOJI[p.category]||'📦'} ${esc(p.name)}${p.brand?` <span style="color:var(--text3);font-weight:400">· ${esc(p.brand)}</span>`:''}</span>
+        <button type="button" class="memo-copy-btn" onclick="copyProductMemo('${p.id}')">📋 복사</button>
+      </div>
+      <textarea class="memo-textarea" id="memo-${p.id}"
+        placeholder="이 제품에 대한 메모나 리뷰를 자유롭게 적어보세요..."
+        oninput="queueSaveMemo('${p.id}',this.value)">${esc(p.review||'')}</textarea>
+    </div>
+  `).join('')
+    : `<div class="empty"><div class="big">📝</div><p>${q?'검색 결과가 없어요':'제품이 없어요<br>재고를 먼저 추가해주세요'}</p></div>`;
+}
+
+function queueSaveMemo(id,val){
+  clearTimeout(_memoTimers[id]);
+  _memoTimers[id]=setTimeout(async()=>{
+    await dbUpdate(id,{review:val});
+  },600);
+}
+
+async function copyProductMemo(id){
+  const p=products.find(x=>x.id===id);if(!p)return;
+  const ta=document.getElementById(`memo-${id}`);
+  const text=(ta?ta.value:(p.review||'')).trim();
+  if(!text){showToast('메모가 비어있어요');return;}
+  try{
+    await navigator.clipboard.writeText(text);
+    showToast(`'${p.name}' 메모를 복사했어요 📋`);
+  }catch{
+    showToast('복사에 실패했어요. 직접 선택해서 복사해주세요');
+  }
+}
+
+async function copyAllMemos(){
+  const withMemo=products
+    .map(p=>{
+      const ta=document.getElementById(`memo-${p.id}`);
+      const v=(ta?ta.value:(p.review||'')).trim();
+      return {name:p.name,v};
+    })
+    .filter(x=>x.v);
+  if(!withMemo.length){showToast('복사할 메모가 없어요');return;}
+  const text=withMemo.map(x=>`[${x.name}]\n${x.v}`).join('\n\n');
+  try{
+    await navigator.clipboard.writeText(text);
+    showToast(`메모 ${withMemo.length}개를 모두 복사했어요 📋`);
+  }catch{
+    showToast('복사에 실패했어요. 직접 선택해서 복사해주세요');
+  }
 }
 function setFilter(f,el){
   filter=f;
