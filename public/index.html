@@ -2323,17 +2323,25 @@ function renderMemo(){
       <textarea class="memo-textarea" id="memo-${m.id}"
         placeholder="메모나 리뷰를 자유롭게 적어보세요..."
         oninput="queueSaveMemo('${m.id}',this.value);updateMemoCount('${m.id}',this.value)">${esc(m.content||'')}</textarea>
-      <div class="memo-count" id="memo-count-${m.id}">공백 제외 ${charCountNoSpace(m.content||'')}자</div>
+      <div class="memo-count" id="memo-count-${m.id}">공백·괄호()·*표시* 제외 ${charCountNoSpace(m.content||'')}자</div>
     </div>`;
   }).join('');
 }
 
+// 공백 + 괄호() + *별표로 감싼 부분* 은 글자수에서 제외
 function charCountNoSpace(s){
-  return String(s||'').replace(/\s/g,'').length;
+  let t=String(s||'');
+  // 괄호 안 내용 제외 (중첩 괄호도 반복 처리)
+  let prev;
+  do{ prev=t; t=t.replace(/\([^()]*\)/g,''); }while(t!==prev);
+  do{ prev=t; t=t.replace(/（[^（）]*）/g,''); }while(t!==prev);
+  // *제외할 글자* 형식으로 감싼 부분 제외
+  t=t.replace(/\*[^*]*\*/g,'');
+  return t.replace(/\s/g,'').length;
 }
 function updateMemoCount(id,val){
   const el=document.getElementById(`memo-count-${id}`);
-  if(el)el.textContent=`공백 제외 ${charCountNoSpace(val)}자`;
+  if(el)el.textContent=`공백·괄호()·*표시* 제외 ${charCountNoSpace(val)}자`;
 }
 
 async function addMemo(){
