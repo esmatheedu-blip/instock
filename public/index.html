@@ -520,7 +520,6 @@ body{
 <div class="tabs">
   <div class="tab active" onclick="switchTab('dashboard',this)">🏠 대시보드</div>
   <div class="tab"        onclick="switchTab('inventory',this)">📦 재고목록</div>
-  <div class="tab"        onclick="switchTab('expiry',this)"   >⏰ 유통기한</div>
   <div class="tab"        onclick="switchTab('history',this)"  >📋 사용기록</div>
   <div class="tab"        onclick="switchTab('memo',this)"      >📝 메모장</div>
 </div>
@@ -571,6 +570,7 @@ body{
     </div>
     <div class="filter-row">
       <div class="chip active" onclick="setFilter('all',this)">전체</div>
+      <div class="chip" id="chip-expiry-only" onclick="toggleExpiryOnly(this)">⏰ 임박만</div>
       <div class="chip" onclick="setFilter('스킨/토너',this)">스킨/토너</div>
       <div class="chip" onclick="setFilter('에센스/세럼',this)">에센스/세럼</div>
       <div class="chip" onclick="setFilter('크림',this)">크림</div>
@@ -597,17 +597,6 @@ body{
       </select>
     </div>
     <div class="product-list" id="product-list"></div>
-    <div class="bulk-bar">
-      <span class="b-info">0개 선택됨</span>
-      <div>
-        <button class="b-cancel" onclick="cancelUseSelection()">취소</button>
-        <button class="b-done" onclick="markUsedBulk()">사용완료 처리</button>
-      </div>
-    </div>
-  </div>
-
-  <div id="tab-expiry" style="display:none">
-    <div class="product-list" id="expiry-list"></div>
     <div class="bulk-bar">
       <span class="b-info">0개 선택됨</span>
       <div>
@@ -1805,7 +1794,7 @@ function showToast(msg){
 // ═══════════════════════════════════════
 //  RENDER
 // ═══════════════════════════════════════
-function renderAll(){renderDashboard();renderInventory();renderExpiry();renderHistory();renderMemo();}
+function renderAll(){renderDashboard();renderInventory();renderHistory();renderMemo();}
 
 function renderDashboard(){
   const expired=products.filter(p=>{const d=daysLeft(p.expiry);return d!==null&&d<0;});
@@ -1848,10 +1837,11 @@ function renderDashboard(){
 
 function filteredSorted(){
   let list=[...products];
+  if(expiryOnly)list=list.filter(p=>p.expiry);
   if(filter!=='all')list=list.filter(p=>p.category===filter);
   const q=(document.getElementById('search-input')?.value||'').toLowerCase();
   if(q)list=list.filter(p=>(p.name||'').toLowerCase().includes(q)||(p.brand||'').toLowerCase().includes(q));
-  if(currentSort==='expiry')list.sort((a,b)=>(daysLeft(a.expiry)??9999)-(daysLeft(b.expiry)??9999));
+  if(expiryOnly||currentSort==='expiry')list.sort((a,b)=>(daysLeft(a.expiry)??9999)-(daysLeft(b.expiry)??9999));
   else if(currentSort==='name')list.sort((a,b)=>(a.name||'').localeCompare(b.name||'','ko'));
   else if(currentSort==='added')list.sort((a,b)=>(b.addedAt||0)-(a.addedAt||0));
   else if(currentSort==='qty')list.sort((a,b)=>(b.qty||1)-(a.qty||1));
@@ -2185,14 +2175,6 @@ function renderInventory(){
     :`<div class="empty"><div class="big">🧴</div><p>제품을 추가해보세요<br>+ 버튼을 눌러 시작하세요</p></div>`;
   syncCheckboxes();
 }
-function renderExpiry(){
-  const sorted=[...products].filter(p=>p.expiry)
-    .sort((a,b)=>(daysLeft(a.expiry)??9999)-(daysLeft(b.expiry)??9999));
-  const el=document.getElementById('expiry-list');
-  el.innerHTML=sorted.length?sorted.map(cardHtml).join('')
-    :`<div class="empty"><div class="big">📅</div><p>유통기한 정보가 있는<br>제품이 없어요</p></div>`;
-  syncCheckboxes();
-}
 function syncCheckboxes(){
   selectedForUse.forEach(key=>{
     const [id,batchId]=key.split('::');
@@ -2290,12 +2272,11 @@ async function undoUsage(historyId){
 }
 
 function switchTab(tab,el){
-  ['dashboard','inventory','expiry','history','memo'].forEach(t=>
+  ['dashboard','inventory','history','memo'].forEach(t=>
     document.getElementById('tab-'+t).style.display=t===tab?'':'none');
   document.querySelectorAll('.tab').forEach(t=>t.classList.remove('active'));
   el.classList.add('active');
   if(tab==='inventory')renderInventory();
-  if(tab==='expiry')renderExpiry();
   if(tab==='history')renderHistory();
   if(tab==='memo')renderMemo();
 }
@@ -2394,10 +2375,16 @@ async function copyAllMemos(){
     showToast('복사에 실패했어요. 직접 선택해서 복사해주세요');
   }
 }
+let expiryOnly=false;
 function setFilter(f,el){
   filter=f;
-  document.querySelectorAll('.chip').forEach(c=>c.classList.remove('active'));
+  document.querySelectorAll('.chip').forEach(c=>{ if(c.id!=='chip-expiry-only')c.classList.remove('active'); });
   el.classList.add('active');renderInventory();
+}
+function toggleExpiryOnly(el){
+  expiryOnly=!expiryOnly;
+  el.classList.toggle('active',expiryOnly);
+  renderInventory();
 }
 </script>
 </body>
