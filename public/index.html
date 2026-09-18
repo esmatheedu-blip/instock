@@ -1581,8 +1581,8 @@ async function addProduct(){
     const existing=products.find(x=>x.id===_selectedExistingId);
     if(existing){
       const batches=getBatches(existing);
-      // 기획세트(배치가 여러 개)인 경우 → 기존 배치 label/capacity 구조 그대로 복제해서 추가
-      if(batches.length>1){
+      // 진짜 기획세트(isSet)인 경우에만 → 기존 배치 label/capacity 구조 그대로 복제해서 추가
+      if(existing.isSet && batches.length>1){
         const newBatches=batches.map(b=>({
           id:'b_'+Date.now()+Math.random().toString(36).slice(2)+'_'+b.id,
           expiry,
