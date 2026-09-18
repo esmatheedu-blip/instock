@@ -1940,7 +1940,7 @@ function cardHtml(p){
 
   const batchRows=batches.map(b=>{
     const bd=daysLeft(b.expiry);
-    const labelVal=b.label||b.capacity||'';
+    const labelVal=b.label||b.capacity||p.capacity||'';
     return`<div class="batch-row">
       <div class="b-exp" id="bexp-${p.id}-${b.id}">
         <span class="tag exp-edit-btn" id="blabel-${p.id}-${b.id}" onclick="editBatchLabel('${p.id}','${b.id}')" style="background:var(--surface2);color:var(--accent);font-weight:700;min-width:32px;display:inline-block;text-align:center" title="클릭해서 라벨 수정">${labelVal?esc(labelVal):'<span style="color:var(--text3);font-weight:400">라벨</span>'}</span>
