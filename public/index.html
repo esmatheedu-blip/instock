@@ -1596,11 +1596,11 @@ async function addProduct(){
         closeModal();renderAll();
         showToast(`🎁 '${existing.name}' 기획세트 배치 ${newBatches.length}개 추가됐어요! ✨`);
       } else {
-        // 일반 제품인 경우 → 단순 배치 1개 추가
-        batches.push({id:'b_'+Date.now()+Math.random().toString(36).slice(2),expiry,qty});
+        // 일반 제품인 경우 → 단순 배치 1개 추가 (입력한 용량은 이 배치에만 귀속)
+        batches.push({id:'b_'+Date.now()+Math.random().toString(36).slice(2),expiry,qty,capacity:capacity||''});
         const totalQty=batches.reduce((s,b)=>s+(b.qty||0),0);
         await dbUpdate(existing.id,{batches,qty:totalQty,expiry:earliestExpiry(batches),
-          capacity:capacity||existing.capacity,note:note||existing.note});
+          capacity:existing.capacity||capacity,note:note||existing.note});
         closeModal();renderAll();
         showToast(`'${existing.name}'에 새 배치 추가됨! (총 ${totalQty}개) ✨`);
       }
@@ -1661,12 +1661,12 @@ async function addProduct(){
     const batches=existing.batches&&existing.batches.length
       ?[...existing.batches]
       :[{id:'b0_'+existing.id,expiry:existing.expiry||'',qty:existing.qty||1}];
-    batches.push({id:'b_'+Date.now()+Math.random().toString(36).slice(2),expiry,qty});
+    batches.push({id:'b_'+Date.now()+Math.random().toString(36).slice(2),expiry,qty,capacity:capacity||''});
     const totalQty=batches.reduce((s,b)=>s+(b.qty||0),0);
     const earliest=earliestExpiry(batches);
     await dbUpdate(existing.id,{
       batches,qty:totalQty,expiry:earliest,
-      capacity:capacityFinal||existing.capacity,
+      capacity:existing.capacity||capacityFinal,
       note:note||existing.note
     });
     closeModal();renderAll();
@@ -1968,7 +1968,7 @@ function cardHtml(p){
       <div class="p-brand" style="display:flex;gap:4px;align-items:center;flex-wrap:wrap;margin-top:2px">
         <span id="pbrand-${p.id}" style="color:var(--text3)">${esc(p.brand||'')}</span>
         ${p.brand&&p.capacity?'<span style="color:var(--text3)">·</span>':''}
-        <span id="pcap-${p.id}" style="color:var(--text3)">${esc(p.capacity||'')}</span>
+        <span id="pcap-${p.id}" onclick="editCapacityInline('${p.id}')" style="color:var(--text3);cursor:pointer" title="클릭해서 용량 수정">${esc(p.capacity||'+ 용량')}</span>
       </div>
       <div class="p-meta">
         <select class="inline-cat-sel" onchange="saveInlineCat('${p.id}',this)"
@@ -2031,6 +2031,15 @@ async function editNoteInline(id){
   const val=prompt('메모 수정',p.note||'');
   if(val===null)return;
   await dbUpdate(id,{note:val.trim()});
+  renderAll();
+}
+
+async function editCapacityInline(id){
+  const p=products.find(x=>x.id===id);if(!p)return;
+  const val=prompt('제품 전체 용량 수정 (예: 120ml)\n※ 배치별로 용량이 다르면 배치별 보기에서 라벨을 따로 눌러 수정해주세요',p.capacity||'');
+  if(val===null)return;
+  await dbUpdate(id,{capacity:val.trim()});
+  showToast('용량이 수정됐어요');
   renderAll();
 }
 
