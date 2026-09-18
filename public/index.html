@@ -313,9 +313,21 @@ body{
 }
 .set-toggle-btn.on{background:var(--accent);border-color:var(--accent);color:#fff}
 .set-builder{margin-bottom:13px}
-.set-builder-row{display:flex;gap:6px;margin-bottom:8px;align-items:center}
+.set-builder-row{display:flex;flex-direction:column;gap:6px;margin-bottom:10px}
+.set-row-top{display:flex;gap:6px;align-items:center}
 .set-builder-row .fi{padding:9px 12px;font-size:13px}
 .set-builder-row .set-row-exp{width:92px;flex:none;text-align:center;padding:9px 4px;font-size:12px}
+
+/* 용량 빠른 입력 버튼 (숫자 누적 + 단위 지정) */
+.cap-quickpad{display:flex;flex-wrap:wrap;gap:6px;margin-top:6px}
+.cap-btn{
+  background:var(--surface2);color:var(--text2);border:1.5px solid var(--border);
+  border-radius:8px;padding:6px 11px;font-size:12px;font-weight:700;cursor:pointer;
+  font-family:inherit;-webkit-tap-highlight-color:transparent;min-width:34px;text-align:center;
+}
+.cap-btn:active{background:var(--border)}
+.cap-btn.cap-unit{background:#fff;color:var(--accent);border-color:var(--accent)}
+.cap-btn.cap-clear{color:var(--red);border-color:#ffd6d6;background:#fff5f5}
 .set-row-del{
   flex-shrink:0;width:32px;height:32px;border-radius:8px;border:none;
   background:#ffe5e5;color:var(--red);font-size:14px;cursor:pointer;
@@ -655,6 +667,10 @@ body{
     </div>
     <div class="set-builder" id="set-builder" style="display:none">
       <div class="set-toggle-row">
+        <label class="fl">🔢 용량 동일 적용</label>
+        <button type="button" class="set-toggle-btn" id="cap-sync-toggle-btn" onclick="toggleCapacitySync()">OFF</button>
+      </div>
+      <div class="set-toggle-row">
         <label class="fl">📅 유통기한 동일 적용</label>
         <button type="button" class="set-toggle-btn" id="exp-sync-toggle-btn" onclick="toggleExpirySync()">OFF</button>
       </div>
@@ -667,9 +683,18 @@ body{
         <label class="fl">브랜드</label>
         <input class="fi" id="f-brand" type="text" placeholder="예: 이니스프리">
       </div>
-      <div class="fg" id="fg-capacity">
+      <div class="fg cap-scope" id="fg-capacity">
         <label class="fl">용량</label>
-        <input class="fi" id="f-capacity" type="text" placeholder="예: 50ml, 30g">
+        <input class="fi cap-input" id="f-capacity" type="text" placeholder="예: 50ml, 30g">
+        <div class="cap-quickpad">
+          <button type="button" class="cap-btn" data-amt="100" onclick="capAdjust(this)">100</button>
+          <button type="button" class="cap-btn" data-amt="50" onclick="capAdjust(this)">50</button>
+          <button type="button" class="cap-btn" data-amt="10" onclick="capAdjust(this)">10</button>
+          <button type="button" class="cap-btn" data-amt="1" onclick="capAdjust(this)">1</button>
+          <button type="button" class="cap-btn cap-unit" data-unit="ml" onclick="capSetUnit(this)">ml</button>
+          <button type="button" class="cap-btn cap-unit" data-unit="g" onclick="capSetUnit(this)">g</button>
+          <button type="button" class="cap-btn cap-clear" onclick="capClear(this)">✕</button>
+        </div>
       </div>
     </div>
     <div class="fi-row" id="row-cat-qty">
@@ -1116,7 +1141,7 @@ async function runMigration(){
 }
 
 // ═══════════════════════════════════════
-//  네이버 쇼핑 검색 (Vercel API 프록시)
+//  제품명 입력 처리 (내 재고 검색)
 // ═══════════════════════════════════════
 let nameTimer=null;
 
@@ -1148,10 +1173,8 @@ function onNameInput(val){
   }
   clearTimeout(nameTimer);
   if(val.trim().length<2)return;
-  // 내 등록 제품 즉시 표시
+  // 내 등록 제품에서만 검색
   showMyProductSuggests(val);
-  // 네이버/올리브영 검색은 별도 타이머
-  nameTimer=setTimeout(()=>{searchNaver(val);searchOliveYoung(val);},500);
 }
 
 // ═══════════════════════════════════════
@@ -1265,6 +1288,63 @@ function selectMyProduct(id){
 // ═══════════════════════════════════════
 let setMode=false;
 let expirySyncMode=false;
+let capacitySyncMode=false;
+
+// 용량 동일 적용: ON이면 구성품 중 하나에 용량을 입력하면 나머지도 같은 값으로 자동완성
+function toggleCapacitySync(){
+  capacitySyncMode=!capacitySyncMode;
+  const btn=document.getElementById('cap-sync-toggle-btn');
+  btn.textContent=capacitySyncMode?'ON':'OFF';
+  btn.classList.toggle('on',capacitySyncMode);
+  if(capacitySyncMode){
+    const rows=[...document.querySelectorAll('#set-builder-rows .set-row-label')];
+    const filled=rows.find(r=>r.value.trim());
+    if(filled)rows.forEach(r=>r.value=filled.value);
+  }
+}
+function syncSetRowCapacity(input){
+  if(!capacitySyncMode)return;
+  const v=input.value;
+  document.querySelectorAll('#set-builder-rows .set-row-label').forEach(r=>{
+    if(r!==input)r.value=v;
+  });
+}
+
+// ═══════════════════════════════════════
+//  용량 빠른 입력 (100/50/10/1 버튼 누적 + ml/g 단위 버튼)
+// ═══════════════════════════════════════
+function capQuickpadInput(btn){
+  const scope=btn.closest('.cap-scope');
+  return scope?scope.querySelector('.cap-input'):null;
+}
+function capNumToStr(n){
+  return Number.isInteger(n)?String(n):String(parseFloat(n.toFixed(2)));
+}
+function capAdjust(btn){
+  const input=capQuickpadInput(btn);
+  if(!input)return;
+  const amt=parseFloat(btn.dataset.amt||'0');
+  const cur=input.value.trim();
+  const numM=/^(\d+(?:\.\d+)?)/.exec(cur);
+  const unitM=/([a-zA-Z가-힣]+)\s*$/.exec(cur);
+  const num=(numM?parseFloat(numM[1]):0)+amt;
+  const unit=unitM?unitM[1]:'';
+  input.value=capNumToStr(num)+unit;
+  input.dispatchEvent(new Event('input',{bubbles:true}));
+}
+function capSetUnit(btn){
+  const input=capQuickpadInput(btn);
+  if(!input)return;
+  const numM=/^(\d+(?:\.\d+)?)/.exec(input.value.trim());
+  input.value=(numM?numM[1]:'')+(btn.dataset.unit||'');
+  input.dispatchEvent(new Event('input',{bubbles:true}));
+}
+function capClear(btn){
+  const input=capQuickpadInput(btn);
+  if(!input)return;
+  input.value='';
+  input.dispatchEvent(new Event('input',{bubbles:true}));
+}
 
 function setSetMode(on){
   setMode=on;
@@ -1286,8 +1366,11 @@ function setSetMode(on){
 
   document.getElementById('set-builder-rows').innerHTML='';
   expirySyncMode=false;
+  capacitySyncMode=false;
   const syncBtn=document.getElementById('exp-sync-toggle-btn');
   if(syncBtn){syncBtn.textContent='OFF';syncBtn.classList.remove('on');}
+  const capSyncBtn=document.getElementById('cap-sync-toggle-btn');
+  if(capSyncBtn){capSyncBtn.textContent='OFF';capSyncBtn.classList.remove('on');}
 
   if(on){
     // 제품명에 +/* 기호가 있으면 용량을 자동으로 분류해서 구성품에 채워줌
@@ -1326,12 +1409,24 @@ function syncSetRowExpiry(input){
 function addSetRow(label,expiry){
   const wrap=document.getElementById('set-builder-rows');
   const row=document.createElement('div');
-  row.className='set-builder-row';
+  row.className='set-builder-row cap-scope';
   row.innerHTML=`
-    <input class="fi set-row-label" type="text" placeholder="예: 본품 300ml, 스틱 30ml">
-    <input class="fi set-row-exp" type="text" placeholder="26.08.15" maxlength="10" inputmode="numeric"
-      oninput="autoFormatDate(this);syncSetRowExpiry(this)">
-    <button type="button" class="set-row-del" onclick="this.closest('.set-builder-row').remove()">✕</button>
+    <div class="set-row-top">
+      <input class="fi cap-input set-row-label" type="text" placeholder="예: 본품 300ml, 스틱 30ml"
+        oninput="syncSetRowCapacity(this)">
+      <input class="fi set-row-exp" type="text" placeholder="26.08.15" maxlength="10" inputmode="numeric"
+        oninput="autoFormatDate(this);syncSetRowExpiry(this)">
+      <button type="button" class="set-row-del" onclick="this.closest('.set-builder-row').remove()">✕</button>
+    </div>
+    <div class="cap-quickpad">
+      <button type="button" class="cap-btn" data-amt="100" onclick="capAdjust(this)">100</button>
+      <button type="button" class="cap-btn" data-amt="50" onclick="capAdjust(this)">50</button>
+      <button type="button" class="cap-btn" data-amt="10" onclick="capAdjust(this)">10</button>
+      <button type="button" class="cap-btn" data-amt="1" onclick="capAdjust(this)">1</button>
+      <button type="button" class="cap-btn cap-unit" data-unit="ml" onclick="capSetUnit(this)">ml</button>
+      <button type="button" class="cap-btn cap-unit" data-unit="g" onclick="capSetUnit(this)">g</button>
+      <button type="button" class="cap-btn cap-clear" onclick="capClear(this)">✕</button>
+    </div>
   `;
   if(label!==undefined) row.querySelector('.set-row-label').value=label;
   if(expiry!==undefined) row.querySelector('.set-row-exp').value=formatDateDisplay(expiry)||'';
@@ -1341,94 +1436,13 @@ function addSetRow(label,expiry){
     const filled=rows.find(r=>r.value.trim());
     if(filled)rows.forEach(r=>r.value=filled.value);
   }
-}
-
-async function searchNaver(q){
-  const box=document.getElementById('suggest-box');
-  box.style.display='block';
-  const mineHtml=box.innerHTML;
-  const hasMineSec=mineHtml.includes('suggest-mine');
-  const naverSection=`<div id="naver-suggest-section"><div class="suggest-loading">🤖 AI가 찾는 중...</div></div>`;
-  box.innerHTML=(hasMineSec?mineHtml:'')+naverSection;
-  try{
-    const r=await fetch(`/api/search?query=${encodeURIComponent(q)}`);
-    if(!r.ok)throw new Error();
-    const d=await r.json();
-    const naverEl=document.getElementById('naver-suggest-section');
-    if(!naverEl)return;
-    if(!d.success||!d.name){naverEl.innerHTML='<div class="suggest-loading">AI 인식 결과 없음</div>';return;}
-    naverEl.innerHTML=`<div class="suggest-section-label">🤖 AI 추천</div>`
-      +`<div class="suggest-item" onclick="selectSuggest(0)"
-          data-name="${esc(d.name)}" data-brand="${esc(d.brand||'')}"
-          data-capacity="${esc(d.capacity||'')}" data-category="${esc(d.category||'')}">
-        <div class="suggest-name">${esc(d.name)}</div>
-        ${d.brand||d.capacity?`<div class="suggest-brand">${esc(d.brand||'')}${d.brand&&d.capacity?' · ':''}${esc(d.capacity||'')}</div>`:''}
-      </div>`;
-  }catch{
-    const naverEl=document.getElementById('naver-suggest-section');
-    if(naverEl)naverEl.innerHTML='<div class="suggest-loading">검색 실패 (직접 입력해주세요)</div>';
+  if(capacitySyncMode){
+    const rows=[...document.querySelectorAll('#set-builder-rows .set-row-label')];
+    const filled=rows.find(r=>r.value.trim());
+    if(filled)rows.forEach(r=>r.value=filled.value);
   }
 }
 
-async function searchOliveYoung(q){
-  const box=document.getElementById('suggest-box');
-  box.style.display='block';
-  box.innerHTML+=`<div id="oy-suggest-section"><div class="suggest-loading">🫒 올리브영 검색 중...</div></div>`;
-  try{
-    const r=await fetch(`/api/oliveyoung?keyword=${encodeURIComponent(q)}&size=5`);
-    const d=await r.json();
-    const el=document.getElementById('oy-suggest-section');
-    if(!el)return;
-    if(!d.success||!d.products||!d.products.length){
-      el.innerHTML=`<div class="suggest-loading">올리브영 검색 결과 없음</div>`;
-      return;
-    }
-    window._oyResults=d.products;
-    el.innerHTML=`<div class="suggest-section-label">🫒 올리브영</div>`
-      +d.products.map((p,i)=>{
-        const price=(p.price!=null)?`${Number(p.price).toLocaleString()}원`:'';
-        const stock=(p.inStock===false)?' · 품절':'';
-        return `<div class="suggest-item" onclick="selectOliveYoung(${i})">
-          <div class="suggest-name">${esc(p.name)}</div>
-          ${price||stock?`<div class="suggest-brand">${esc(price)}${stock}</div>`:''}
-        </div>`;
-      }).join('');
-  }catch{
-    const el=document.getElementById('oy-suggest-section');
-    if(el)el.innerHTML=`<div class="suggest-loading">올리브영 검색 실패 (비공식 API 특성상 종종 불안정해요)</div>`;
-  }
-}
-
-function selectOliveYoung(i){
-  const p=(window._oyResults||[])[i];
-  if(!p)return;
-  document.getElementById('f-name').value=p.name;
-  if(!setMode){
-    const capEl=document.getElementById('f-capacity');
-    const autoCap=extractCapacityFromName(p.name);
-    if(capEl&&!capEl.value&&autoCap)capEl.value=autoCap;
-  }
-  hideSuggest();
-  autoDetectCategory(p.name);
-}
-
-function selectSuggest(i){
-  const naverSec=document.getElementById('naver-suggest-section');
-  const items=naverSec?naverSec.querySelectorAll('.suggest-item'):document.querySelectorAll('.suggest-item:not(.suggest-mine)');
-  const item=items[i];
-  if(!item)return;
-  const name=item.dataset.name;
-  document.getElementById('f-name').value=name;
-  if(item.dataset.brand)document.getElementById('f-brand').value=item.dataset.brand;
-  if(item.dataset.capacity)document.getElementById('f-capacity').value=item.dataset.capacity;
-  hideSuggest();
-  if(item.dataset.category){
-    const sel=document.getElementById('f-cat');
-    for(const opt of sel.options){if(opt.value===item.dataset.category){sel.value=item.dataset.category;break;}}
-  }else{
-    autoDetectCategory(name);
-  }
-}
 function hideSuggest(){
   const box=document.getElementById('suggest-box');
   box.style.display='none';box.innerHTML='';
