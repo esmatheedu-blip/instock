@@ -1600,7 +1600,7 @@ async function addProduct(){
         batches.push({id:'b_'+Date.now()+Math.random().toString(36).slice(2),expiry,qty});
         const totalQty=batches.reduce((s,b)=>s+(b.qty||0),0);
         await dbUpdate(existing.id,{batches,qty:totalQty,expiry:earliestExpiry(batches),
-          capacity:existing.capacity||capacity,note:existing.note||note});
+          capacity:capacity||existing.capacity,note:note||existing.note});
         closeModal();renderAll();
         showToast(`'${existing.name}'에 새 배치 추가됨! (총 ${totalQty}개) ✨`);
       }
@@ -1666,8 +1666,8 @@ async function addProduct(){
     const earliest=earliestExpiry(batches);
     await dbUpdate(existing.id,{
       batches,qty:totalQty,expiry:earliest,
-      capacity:existing.capacity||capacityFinal,
-      note:existing.note||note
+      capacity:capacityFinal||existing.capacity,
+      note:note||existing.note
     });
     closeModal();renderAll();
     showToast(`'${name}'에 새 배치 추가됨! (총 ${totalQty}개) ✨`);
