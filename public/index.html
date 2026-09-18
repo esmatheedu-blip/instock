@@ -647,7 +647,7 @@ body{
       <span>🤖</span>
       <span id="img-scan-txt">AI로 제품 사진 인식</span>
     </button>
-    <div style="font-size:11px;color:var(--text3);text-align:center;margin-bottom:14px">올리브영 앱 캡처 또는 제품 사진 업로드</div>
+    <div style="font-size:11px;color:var(--text3);text-align:center;margin-bottom:14px">올리브영 앱 캡처 또는 제품 사진 업로드<br>(PC에서는 Ctrl+V로 붙여넣기도 가능해요)</div>
     <input type="file" id="img-input" accept="image/*" style="display:none" onchange="handleImageScan(event)">
 
     <div class="fg">
@@ -1458,8 +1458,32 @@ function triggerImageScan(){
   document.getElementById('img-input').click();
 }
 
-async function handleImageScan(e){
+function handleImageScan(e){
   const file = e.target.files[0];
+  scanImageFile(file);
+  e.target.value = '';
+}
+
+// Ctrl+V로 이미지 붙여넣기 (PC 작업용)
+document.addEventListener('paste', (e)=>{
+  const modal=document.getElementById('modal');
+  if(!modal||!modal.classList.contains('open'))return;
+  const items=e.clipboardData?.items;
+  if(!items)return;
+  for(const item of items){
+    if(item.type&&item.type.startsWith('image/')){
+      const file=item.getAsFile();
+      if(file){
+        e.preventDefault();
+        showToast('📋 붙여넣은 이미지를 분석할게요...');
+        scanImageFile(file);
+      }
+      break;
+    }
+  }
+});
+
+async function scanImageFile(file){
   if(!file) return;
 
   const btn = document.getElementById('img-scan-btn');
@@ -1514,7 +1538,6 @@ async function handleImageScan(e){
   } finally {
     btn.disabled = false;
     txt.textContent = 'AI로 제품 사진 인식';
-    e.target.value = '';
   }
 }
 
