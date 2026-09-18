@@ -1150,8 +1150,8 @@ function onNameInput(val){
   if(val.trim().length<2)return;
   // 내 등록 제품 즉시 표시
   showMyProductSuggests(val);
-  // 네이버 검색은 별도 타이머
-  nameTimer=setTimeout(()=>searchNaver(val),500);
+  // 네이버/올리브영 검색은 별도 타이머
+  nameTimer=setTimeout(()=>{searchNaver(val);searchOliveYoung(val);},500);
 }
 
 // ═══════════════════════════════════════
@@ -1368,6 +1368,48 @@ async function searchNaver(q){
     const naverEl=document.getElementById('naver-suggest-section');
     if(naverEl)naverEl.innerHTML='<div class="suggest-loading">검색 실패 (직접 입력해주세요)</div>';
   }
+}
+
+async function searchOliveYoung(q){
+  const box=document.getElementById('suggest-box');
+  box.style.display='block';
+  box.innerHTML+=`<div id="oy-suggest-section"><div class="suggest-loading">🫒 올리브영 검색 중...</div></div>`;
+  try{
+    const r=await fetch(`/api/oliveyoung?keyword=${encodeURIComponent(q)}&size=5`);
+    const d=await r.json();
+    const el=document.getElementById('oy-suggest-section');
+    if(!el)return;
+    if(!d.success||!d.products||!d.products.length){
+      el.innerHTML=`<div class="suggest-loading">올리브영 검색 결과 없음</div>`;
+      return;
+    }
+    window._oyResults=d.products;
+    el.innerHTML=`<div class="suggest-section-label">🫒 올리브영</div>`
+      +d.products.map((p,i)=>{
+        const price=(p.price!=null)?`${Number(p.price).toLocaleString()}원`:'';
+        const stock=(p.inStock===false)?' · 품절':'';
+        return `<div class="suggest-item" onclick="selectOliveYoung(${i})">
+          <div class="suggest-name">${esc(p.name)}</div>
+          ${price||stock?`<div class="suggest-brand">${esc(price)}${stock}</div>`:''}
+        </div>`;
+      }).join('');
+  }catch{
+    const el=document.getElementById('oy-suggest-section');
+    if(el)el.innerHTML=`<div class="suggest-loading">올리브영 검색 실패 (비공식 API 특성상 종종 불안정해요)</div>`;
+  }
+}
+
+function selectOliveYoung(i){
+  const p=(window._oyResults||[])[i];
+  if(!p)return;
+  document.getElementById('f-name').value=p.name;
+  if(!setMode){
+    const capEl=document.getElementById('f-capacity');
+    const autoCap=extractCapacityFromName(p.name);
+    if(capEl&&!capEl.value&&autoCap)capEl.value=autoCap;
+  }
+  hideSuggest();
+  autoDetectCategory(p.name);
 }
 
 function selectSuggest(i){
