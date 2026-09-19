@@ -2095,10 +2095,10 @@ function cardHtml(p){
           :`<span class="tag" onclick="editNoteInline('${p.id}')" style="cursor:pointer;color:var(--text3)">+ 메모</span>`}
       </div>
       ${`
-        <button class="expand-btn" id="exp-${cardId}" onclick="toggleBatches('${cardId}')">
+        <button class="expand-btn${expandedCards.has(cardId)?' open':''}" id="exp-${cardId}" onclick="toggleBatches('${cardId}')">
           배치별 보기 <span class="arrow">▾</span>
         </button>
-        <div class="batch-list" id="${cardId}">
+        <div class="batch-list${expandedCards.has(cardId)?' open':''}" id="${cardId}">
           ${batchRows}
           <div class="batch-add-row" style="flex-direction:column;align-items:stretch;gap:8px">
             <div style="display:flex;gap:6px">
@@ -2184,11 +2184,14 @@ async function cycleCategory(id){
   renderAll();
 }
 
+let expandedCards=new Set();
 function toggleBatches(cardId){
   const list=document.getElementById(cardId);
   const btn=document.getElementById('exp-'+cardId);
   list.classList.toggle('open');
   btn.classList.toggle('open');
+  if(expandedCards.has(cardId))expandedCards.delete(cardId);
+  else expandedCards.add(cardId);
 }
 
 // ═══════════════════════════════════════
