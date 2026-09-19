@@ -196,6 +196,12 @@ body{
   padding-top:10px;border-top:1px dashed var(--border);width:100%;
 }
 .batch-list.open{display:flex}
+.batch-group{margin-bottom:4px}
+.batch-group-head{
+  display:flex;align-items:center;gap:8px;font-size:12px;font-weight:700;
+  color:var(--accent);margin:10px 0 6px;padding-bottom:4px;border-bottom:1.5px dashed var(--border);
+}
+.batch-group-qty{color:var(--text3);font-weight:600}
 .batch-row{
   display:flex;justify-content:space-between;align-items:center;
   background:var(--bg);border-radius:10px;padding:8px 12px;font-size:12px;
@@ -1970,23 +1976,38 @@ function filteredSorted(){
   return list;
 }
 
+function normCap(s){ return String(s||'').trim().toLowerCase().replace(/\s+/g,''); }
+
 function cardHtml(p){
   const d=daysLeft(p.expiry),cls=expClass(d);
-  const batches=getBatches(p).sort((a,b)=>{
-    if(!a.expiry&&!b.expiry)return 0;
-    if(!a.expiry)return 1;
-    if(!b.expiry)return -1;
-    return new Date(a.expiry)-new Date(b.expiry);
-  });
-  const multiBatch=batches.length>1;
+  const batches=getBatches(p);
   const cardId='card_'+p.id;
 
-  const batchRows=batches.map(b=>{
+  // 용량별로 그룹화 (같은 제품이라도 30ml/50ml처럼 용량이 다르면 따로 묶어서 표시)
+  const groupMap=new Map();
+  batches.forEach(b=>{
+    const capLabel=(b.capacity||p.capacity||'').trim();
+    const key=normCap(capLabel)||'__none__';
+    if(!groupMap.has(key))groupMap.set(key,{label:capLabel,items:[]});
+    groupMap.get(key).items.push(b);
+  });
+  const groups=[...groupMap.values()].map(g=>{
+    g.items.sort((a,b)=>{
+      if(!a.expiry&&!b.expiry)return 0;
+      if(!a.expiry)return 1;
+      if(!b.expiry)return -1;
+      return new Date(a.expiry)-new Date(b.expiry);
+    });
+    return g;
+  }).sort((a,b)=>(a.label||'').localeCompare(b.label||'','ko'));
+  const multiGroup=groups.length>1;
+
+  const renderBatchRow=(b)=>{
     const bd=daysLeft(b.expiry);
     const labelVal=b.label||b.capacity||p.capacity||'';
     return`<div class="batch-row">
       <div class="b-exp" id="bexp-${p.id}-${b.id}">
-        <span class="tag exp-edit-btn" id="blabel-${p.id}-${b.id}" onclick="editBatchLabel('${p.id}','${b.id}')" style="background:var(--surface2);color:var(--accent);font-weight:700;min-width:32px;display:inline-block;text-align:center" title="클릭해서 라벨 수정">${labelVal?esc(labelVal):'<span style="color:var(--text3);font-weight:400">라벨</span>'}</span>
+        <span class="tag exp-edit-btn" id="blabel-${p.id}-${b.id}" onclick="editBatchLabel('${p.id}','${b.id}')" style="background:var(--surface2);color:var(--accent);font-weight:700;min-width:32px;display:inline-block;text-align:center" title="클릭해서 이 배치의 용량 수정">${labelVal?esc(labelVal):'<span style="color:var(--text3);font-weight:400">라벨</span>'}</span>
         ${b.expiry?`<span class="exp-edit-btn" onclick="editBatchExpiry('${p.id}','${b.id}')">${esc(formatDateDisplay(b.expiry))} ${expTag(bd,b.expiry)}</span>`
           :`<span class="exp-edit-btn tag" onclick="editBatchExpiry('${p.id}','${b.id}')" style="color:var(--text3)">유통기한 설정</span>`}
       </div>
@@ -1995,11 +2016,26 @@ function cardHtml(p){
         <button class="batch-qty-btn" onclick="deleteBatch('${p.id}','${b.id}')" style="background:#ffe5e5;color:var(--red)" title="이 배치 삭제">🗑</button>
       </div>
     </div>`;
-  }).join('');
+  };
+
+  const batchRows=multiGroup
+    ? groups.map(g=>{
+        const groupQty=g.items.reduce((s,b)=>s+(b.qty||0),0);
+        return`<div class="batch-group">
+          <div class="batch-group-head">${esc(g.label||'용량 미지정')} <span class="batch-group-qty">${groupQty}개</span></div>
+          ${g.items.map(b=>renderBatchRow(b)).join('')}
+        </div>`;
+      }).join('')
+    : groups.flatMap(g=>g.items).map(b=>renderBatchRow(b)).join('');
 
   // 카테고리 옵션 목록
   const CAT_LIST=['스킨/토너','에센스/세럼','크림','로션','미스트/오일','선케어','마스크팩','클렌징','메이크업','네일','헤어케어','바디케어','향수/디퓨저','건강식품','기타'];
   const catOptions=CAT_LIST.map(c=>`<option value="${esc(c)}"${c===(p.category||'기타')?'selected':''}>${esc(c)}</option>`).join('');
+
+  const capSummary=multiGroup?groups.map(g=>esc(g.label||'미지정')).join(', '):esc(p.capacity||'+ 용량');
+  const qtyTags=multiGroup
+    ? groups.map(g=>`<span class="tag">🧴 ${esc(g.label||'미지정')} ${g.items.reduce((s,b)=>s+(b.qty||0),0)}개</span>`).join('')
+    : `<span class="tag">📦 ${batches.length}개</span>`;
 
   return`<div class="card-wrap" id="wrap_${p.id}">
     <div class="product-card ${cls}">
@@ -2010,8 +2046,8 @@ function cardHtml(p){
       >${esc(p.name)}</div>
       <div class="p-brand" style="display:flex;gap:4px;align-items:center;flex-wrap:wrap;margin-top:2px">
         <span id="pbrand-${p.id}" style="color:var(--text3)">${esc(p.brand||'')}</span>
-        ${p.brand&&p.capacity?'<span style="color:var(--text3)">·</span>':''}
-        <span id="pcap-${p.id}" onclick="editCapacityInline('${p.id}')" style="color:var(--text3);cursor:pointer" title="클릭해서 용량 수정">${esc(p.capacity||'+ 용량')}</span>
+        ${p.brand&&(p.capacity||multiGroup)?'<span style="color:var(--text3)">·</span>':''}
+        <span id="pcap-${p.id}" onclick="editCapacityInline('${p.id}')" style="color:var(--text3);cursor:pointer" title="클릭해서 기본 용량 수정">${capSummary}</span>
       </div>
       <div class="p-meta">
         <select class="inline-cat-sel" onchange="saveInlineCat('${p.id}',this)"
@@ -2021,7 +2057,7 @@ function cardHtml(p){
           ${catOptions}
         </select>
         
-        ${`<span class="tag">📦 ${batches.length}개</span>`}
+        ${qtyTags}
         ${p.isSample?`<span class="tag" style="background:#eef2ff;color:#6366f1">🧪 샘플</span>`:''}
         ${p.note?`<span class="tag" onclick="editNoteInline('${p.id}')" style="cursor:pointer">📝 ${esc(p.note)}</span>`
           :`<span class="tag" onclick="editNoteInline('${p.id}')" style="cursor:pointer;color:var(--text3)">+ 메모</span>`}
@@ -2039,10 +2075,10 @@ function cardHtml(p){
               <button class="btn btn-primary" onclick="addBatchToProduct('${p.id}')" style="flex:none">+ 배치</button>
             </div>
             <label style="display:flex;align-items:center;gap:6px;font-size:12px;color:var(--text2);cursor:pointer">
-              <input type="checkbox" id="batch-cap-same-${p.id}" checked onchange="toggleBatchCapSame('${p.id}')">
-              동일 용량 사용${p.capacity?` (${esc(p.capacity)})`:''}
+              <input type="checkbox" id="batch-cap-same-${p.id}" ${multiGroup?'':'checked'} onchange="toggleBatchCapSame('${p.id}')">
+              동일 용량 사용${p.capacity&&!multiGroup?` (${esc(p.capacity)})`:''}
             </label>
-            <div class="cap-scope" id="batch-cap-wrap-${p.id}" style="display:none">
+            <div class="cap-scope" id="batch-cap-wrap-${p.id}" style="display:${multiGroup?'block':'none'}">
               <input class="fi cap-input" type="text" id="batch-cap-${p.id}" placeholder="이 배치만 다른 용량 (예: 30ml)">
               <div class="cap-quickpad">
                 <button type="button" class="cap-btn" data-amt="100" onclick="capAdjust(this)">100</button>
@@ -2099,7 +2135,7 @@ async function editNoteInline(id){
 
 async function editCapacityInline(id){
   const p=products.find(x=>x.id===id);if(!p)return;
-  const val=prompt('제품 전체 용량 수정 (예: 120ml)\n※ 배치별로 용량이 다르면 배치별 보기에서 라벨을 따로 눌러 수정해주세요',p.capacity||'');
+  const val=prompt('기본 용량 수정 (예: 120ml)\n※ 이 제품에 서로 다른 용량(예: 30ml/50ml)이 섞여 있다면\n배치별 보기에서 각 배치의 라벨을 눌러 개별 용량을 지정해주세요',p.capacity||'');
   if(val===null)return;
   await dbUpdate(id,{capacity:val.trim()});
   showToast('용량이 수정됐어요');
