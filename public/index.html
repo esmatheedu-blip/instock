@@ -254,13 +254,34 @@ body{
 .bulk-bar .b-done{background:var(--green);color:#fff}
 .bulk-bar .b-cancel{background:var(--bg);color:var(--text2);margin-right:6px}
 
-.sample-select-chk{
-  width:36px;height:36px;border-radius:10px;border:1.5px solid var(--border);
-  background:var(--surface);font-size:16px;cursor:pointer;
+.sample-bulk-bar{
+  display:none;position:sticky;bottom:calc(16px + var(--safe-bot));
+  background:var(--surface);border:1.5px solid #6366f1;border-radius:14px;
+  padding:10px 14px;margin-top:10px;box-shadow:var(--shadow);
+  align-items:center;justify-content:space-between;gap:10px;z-index:120;
+}
+.sample-bulk-bar.show{display:flex}
+.sample-bulk-bar .b-info{font-size:13px;color:var(--text2);font-weight:600}
+.sample-bulk-bar button{
+  border:none;border-radius:10px;padding:8px 16px;font-size:13px;font-weight:700;
+  cursor:pointer;font-family:inherit;-webkit-tap-highlight-color:transparent;
+}
+.sample-bulk-bar .b-cancel{background:var(--bg);color:var(--text2);margin-right:6px}
+
+.sample-batch-chk{
+  flex-shrink:0;width:22px;height:22px;border-radius:6px;border:1.5px solid var(--border);
+  background:var(--surface);font-size:12px;cursor:pointer;
   display:flex;align-items:center;justify-content:center;
   -webkit-tap-highlight-color:transparent;opacity:.45;
 }
-.sample-select-chk.checked{background:#eef2ff;border-color:#6366f1;opacity:1}
+.sample-batch-chk.checked{background:#eef2ff;border-color:#6366f1;opacity:1}
+.group-select-all{
+  margin-left:auto;background:var(--surface2);color:var(--accent);
+  border:1.5px solid var(--border);border-radius:8px;padding:3px 9px;
+  font-size:11px;font-weight:700;cursor:pointer;font-family:inherit;
+  -webkit-tap-highlight-color:transparent;
+}
+.group-select-all.checked{background:#eef2ff;border-color:#6366f1;color:#6366f1}
 
 /* 유통기한 인라인 수정 */
 .exp-edit-input{
@@ -633,7 +654,7 @@ body{
         <button class="b-done" onclick="markUsedBulk()">사용완료 처리</button>
       </div>
     </div>
-    <div class="bulk-bar" id="sample-select-bar">
+    <div class="sample-bulk-bar" id="sample-select-bar">
       <span class="b-info" id="sample-select-info">0개 선택됨</span>
       <div>
         <button class="b-cancel" onclick="cancelSampleSelect()">취소</button>
@@ -1625,7 +1646,8 @@ async function addProduct(){
           expiry,
           qty,
           capacity:b.capacity||'',
-          label:b.label||b.capacity||''
+          label:b.label||b.capacity||'',
+          isSample:sampleMode
         }));
         const allBatches=[...batches,...newBatches];
         const totalQty=allBatches.reduce((s,b)=>s+(b.qty||0),0);
@@ -1634,7 +1656,7 @@ async function addProduct(){
         showToast(`🎁 '${existing.name}' 기획세트 배치 ${newBatches.length}개 추가됐어요! ✨`);
       } else {
         // 일반 제품인 경우 → 단순 배치 1개 추가 (입력한 용량은 이 배치에만 귀속)
-        batches.push({id:'b_'+Date.now()+Math.random().toString(36).slice(2),expiry,qty,capacity:capacity||''});
+        batches.push({id:'b_'+Date.now()+Math.random().toString(36).slice(2),expiry,qty,capacity:capacity||'',isSample:sampleMode});
         const totalQty=batches.reduce((s,b)=>s+(b.qty||0),0);
         await dbUpdate(existing.id,{batches,qty:totalQty,expiry:earliestExpiry(batches),
           capacity:existing.capacity||capacity,note:note||existing.note});
@@ -1666,7 +1688,8 @@ async function addProduct(){
       expiry:s.expiry,
       qty:1,
       capacity:s.capacity,
-      label:s.capacity
+      label:s.capacity,
+      isSample:sampleMode
     }));
     const totalQty=batches.length;
     const finalCapacity=setItems.map(s=>s.capacity).join('+');
@@ -1680,7 +1703,7 @@ async function addProduct(){
       closeModal();renderAll();
       showToast(`🎁 기획세트 배치 ${totalQty}개 추가됐어요! ✨`);
     }else{
-      const p2={barcode:'',name,brand,category,capacity:finalCapacity,expiry:earliest,qty:totalQty,note,batches,isSet:true,isSample:sampleMode,addedAt:Date.now()};
+      const p2={barcode:'',name,brand,category,capacity:finalCapacity,expiry:earliest,qty:totalQty,note,batches,isSet:true,addedAt:Date.now()};
       await dbAdd(p2);closeModal();renderAll();
       showToast(`🎁 기획세트 '${name}' — ${totalQty}개 배치로 저장됐어요 ✨`);
     }
@@ -1698,7 +1721,7 @@ async function addProduct(){
     const batches=existing.batches&&existing.batches.length
       ?[...existing.batches]
       :[{id:'b0_'+existing.id,expiry:existing.expiry||'',qty:existing.qty||1}];
-    batches.push({id:'b_'+Date.now()+Math.random().toString(36).slice(2),expiry,qty,capacity:capacity||''});
+    batches.push({id:'b_'+Date.now()+Math.random().toString(36).slice(2),expiry,qty,capacity:capacity||'',isSample:sampleMode});
     const totalQty=batches.reduce((s,b)=>s+(b.qty||0),0);
     const earliest=earliestExpiry(batches);
     await dbUpdate(existing.id,{
@@ -1716,8 +1739,7 @@ async function addProduct(){
       expiry,
       qty,
       note,
-      batches:[{id:'b_'+Date.now()+Math.random().toString(36).slice(2),expiry,qty}],
-      isSample:sampleMode,
+      batches:[{id:'b_'+Date.now()+Math.random().toString(36).slice(2),expiry,qty,isSample:sampleMode}],
       addedAt:Date.now()
     };
     await dbAdd(p);closeModal();renderAll();
@@ -1965,7 +1987,7 @@ function renderDashboard(){
 function filteredSorted(){
   let list=[...products];
   if(expiryOnly)list=list.filter(p=>p.expiry);
-  if(sampleOnly)list=list.filter(p=>p.isSample);
+  if(sampleOnly)list=list.filter(p=>getBatches(p).some(b=>b.isSample));
   if(filter!=='all')list=list.filter(p=>p.category===filter);
   const q=(document.getElementById('search-input')?.value||'').toLowerCase();
   if(q)list=list.filter(p=>(p.name||'').toLowerCase().includes(q)||(p.brand||'').toLowerCase().includes(q));
@@ -2005,14 +2027,19 @@ function cardHtml(p){
   const renderBatchRow=(b)=>{
     const bd=daysLeft(b.expiry);
     const labelVal=b.label||b.capacity||p.capacity||'';
+    const bKey=`${p.id}::${b.id}`;
+    const qtyBtn=sampleSelectMode
+      ?`<button class="sample-batch-chk${selectedForSample.has(bKey)?' checked':''}" id="schk-${p.id}-${b.id}" onclick="toggleSampleBatchCheck('${p.id}','${b.id}')" title="이 배치를 샘플로 선택">🧪</button>`
+      :`<button class="use-checkbox-batch" id="chk-${p.id}-${b.id}" onclick="toggleUseCheck('${p.id}','${b.id}')" title="이 배치 사용완료로 표시">✓</button>`;
     return`<div class="batch-row">
       <div class="b-exp" id="bexp-${p.id}-${b.id}">
         <span class="tag exp-edit-btn" id="blabel-${p.id}-${b.id}" onclick="editBatchLabel('${p.id}','${b.id}')" style="background:var(--surface2);color:var(--accent);font-weight:700;min-width:32px;display:inline-block;text-align:center" title="클릭해서 이 배치의 용량 수정">${labelVal?esc(labelVal):'<span style="color:var(--text3);font-weight:400">라벨</span>'}</span>
         ${b.expiry?`<span class="exp-edit-btn" onclick="editBatchExpiry('${p.id}','${b.id}')">${esc(formatDateDisplay(b.expiry))} ${expTag(bd,b.expiry)}</span>`
           :`<span class="exp-edit-btn tag" onclick="editBatchExpiry('${p.id}','${b.id}')" style="color:var(--text3)">유통기한 설정</span>`}
+        ${b.isSample?`<span class="etag" style="background:#eef2ff;color:#6366f1">🧪 샘플</span>`:''}
       </div>
       <div class="b-qty">
-        <button class="use-checkbox-batch" id="chk-${p.id}-${b.id}" onclick="toggleUseCheck('${p.id}','${b.id}')" title="이 배치 사용완료로 표시">✓</button>
+        ${qtyBtn}
         <button class="batch-qty-btn" onclick="deleteBatch('${p.id}','${b.id}')" style="background:#ffe5e5;color:var(--red)" title="이 배치 삭제">🗑</button>
       </div>
     </div>`;
@@ -2021,8 +2048,13 @@ function cardHtml(p){
   const batchRows=multiGroup
     ? groups.map(g=>{
         const groupQty=g.items.reduce((s,b)=>s+(b.qty||0),0);
+        const groupKey=g.items.map(b=>`${p.id}::${b.id}`);
+        const allChecked=sampleSelectMode&&groupKey.every(k=>selectedForSample.has(k));
+        const groupSelectBtn=sampleSelectMode
+          ?`<button type="button" class="group-select-all${allChecked?' checked':''}" onclick='toggleSampleGroupCheck("${p.id}", ${JSON.stringify(g.items.map(b=>b.id))})' title="이 용량 그룹 전체 선택">${allChecked?'✓ 전체선택됨':'전체 선택'}</button>`
+          :'';
         return`<div class="batch-group">
-          <div class="batch-group-head">${esc(g.label||'용량 미지정')} <span class="batch-group-qty">${groupQty}개</span></div>
+          <div class="batch-group-head">${esc(g.label||'용량 미지정')} <span class="batch-group-qty">${groupQty}개</span>${groupSelectBtn}</div>
           ${g.items.map(b=>renderBatchRow(b)).join('')}
         </div>`;
       }).join('')
@@ -2058,7 +2090,7 @@ function cardHtml(p){
         </select>
         
         ${qtyTags}
-        ${p.isSample?`<span class="tag" style="background:#eef2ff;color:#6366f1">🧪 샘플</span>`:''}
+        ${(()=>{const n=batches.filter(b=>b.isSample).length;return n>0?`<span class="tag" style="background:#eef2ff;color:#6366f1">🧪 샘플 ${n}개</span>`:'';})()}
         ${p.note?`<span class="tag" onclick="editNoteInline('${p.id}')" style="cursor:pointer">📝 ${esc(p.note)}</span>`
           :`<span class="tag" onclick="editNoteInline('${p.id}')" style="cursor:pointer;color:var(--text3)">+ 메모</span>`}
       </div>
@@ -2095,7 +2127,6 @@ function cardHtml(p){
       `}
     </div>
     <div class="p-right">
-      ${sampleSelectMode?`<button class="sample-select-chk${selectedForSample.has(p.id)?' checked':''}" id="schk-${p.id}" onclick="toggleSampleCheck('${p.id}')" title="샘플로 선택">🧪</button>`:''}
       <button class="del-btn" onclick="deleteProduct('${p.id}')">🗑</button>
     </div>
     </div>
@@ -2572,8 +2603,13 @@ function toggleSampleSelectMode(){
   sampleSelectMode=!sampleSelectMode;
   const btn=document.getElementById('sample-select-toggle-btn');
   if(sampleSelectMode){
-    // 이미 샘플로 지정된 항목은 미리 체크된 상태로 시작
-    selectedForSample=new Set(filteredSorted().filter(p=>p.isSample).map(p=>p.id));
+    // 이미 샘플로 지정된 배치는 미리 체크된 상태로 시작
+    selectedForSample=new Set();
+    products.forEach(p=>{
+      getBatches(p).forEach(b=>{
+        if(b.isSample)selectedForSample.add(`${p.id}::${b.id}`);
+      });
+    });
     btn.textContent='🧪 선택 중...';
     btn.style.background='#6366f1';btn.style.color='#fff';
   }else{
@@ -2581,7 +2617,7 @@ function toggleSampleSelectMode(){
     btn.textContent='🧪 샘플 지정';
     btn.style.background='';btn.style.color='';
   }
-  renderInventory();
+  renderAll();
   updateSampleSelectBar();
 }
 function cancelSampleSelect(){
@@ -2589,30 +2625,42 @@ function cancelSampleSelect(){
   selectedForSample.clear();
   const btn=document.getElementById('sample-select-toggle-btn');
   if(btn){btn.textContent='🧪 샘플 지정';btn.style.background='';btn.style.color='';}
-  renderInventory();
+  renderAll();
   updateSampleSelectBar();
 }
-function toggleSampleCheck(id){
-  const box=document.getElementById(`schk-${id}`);
-  if(selectedForSample.has(id)){
-    selectedForSample.delete(id);if(box)box.classList.remove('checked');
+function toggleSampleBatchCheck(pid,bid){
+  const key=`${pid}::${bid}`;
+  const box=document.getElementById(`schk-${pid}-${bid}`);
+  if(selectedForSample.has(key)){
+    selectedForSample.delete(key);if(box)box.classList.remove('checked');
   }else{
-    selectedForSample.add(id);if(box)box.classList.add('checked');
+    selectedForSample.add(key);if(box)box.classList.add('checked');
   }
   updateSampleSelectBar();
+}
+function toggleSampleGroupCheck(pid,batchIds){
+  const keys=batchIds.map(bid=>`${pid}::${bid}`);
+  const allChecked=keys.every(k=>selectedForSample.has(k));
+  keys.forEach(k=>{ if(allChecked)selectedForSample.delete(k); else selectedForSample.add(k); });
+  renderInventory();
 }
 function updateSampleSelectBar(){
   const bar=document.getElementById('sample-select-bar');
   const info=document.getElementById('sample-select-info');
   if(!bar)return;
   bar.classList.toggle('show',sampleSelectMode);
-  if(info)info.textContent=`${selectedForSample.size}개 선택됨`;
+  if(info)info.textContent=`${selectedForSample.size}개 배치 선택됨`;
 }
 async function applySampleSelection(){
-  const visible=filteredSorted();
-  const changes=visible.filter(p=>!!p.isSample!==selectedForSample.has(p.id));
-  for(const p of changes){
-    await dbUpdate(p.id,{isSample:selectedForSample.has(p.id)});
+  let changedCount=0;
+  for(const p of products){
+    const batches=getBatches(p);
+    let changed=false;
+    batches.forEach(b=>{
+      const want=selectedForSample.has(`${p.id}::${b.id}`);
+      if(!!b.isSample!==want){ b.isSample=want; changed=true; changedCount++; }
+    });
+    if(changed) await dbUpdate(p.id,{batches});
   }
   sampleSelectMode=false;
   selectedForSample.clear();
@@ -2620,7 +2668,7 @@ async function applySampleSelection(){
   if(btn){btn.textContent='🧪 샘플 지정';btn.style.background='';btn.style.color='';}
   renderAll();
   updateSampleSelectBar();
-  showToast(changes.length?`샘플 지정 완료! (변경 ${changes.length}개) 🧪`:'변경사항이 없어요');
+  showToast(changedCount?`샘플 지정 완료! (변경 ${changedCount}개) 🧪`:'변경사항이 없어요');
 }
 
 function setFilter(f,el){
