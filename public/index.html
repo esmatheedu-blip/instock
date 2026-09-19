@@ -248,6 +248,14 @@ body{
 .bulk-bar .b-done{background:var(--green);color:#fff}
 .bulk-bar .b-cancel{background:var(--bg);color:var(--text2);margin-right:6px}
 
+.sample-select-chk{
+  width:36px;height:36px;border-radius:10px;border:1.5px solid var(--border);
+  background:var(--surface);font-size:16px;cursor:pointer;
+  display:flex;align-items:center;justify-content:center;
+  -webkit-tap-highlight-color:transparent;opacity:.45;
+}
+.sample-select-chk.checked{background:#eef2ff;border-color:#6366f1;opacity:1}
+
 /* 유통기한 인라인 수정 */
 .exp-edit-input{
   font-size:11px;padding:2px 6px;border-radius:20px;border:1.5px solid var(--accent2);
@@ -583,6 +591,7 @@ body{
     <div class="filter-row">
       <div class="chip active" onclick="setFilter('all',this)">전체</div>
       <div class="chip" id="chip-expiry-only" onclick="toggleExpiryOnly(this)">⏰ 임박만</div>
+      <div class="chip" id="chip-sample-only" onclick="toggleSampleOnly(this)">🧪 샘플만</div>
       <div class="chip" onclick="setFilter('스킨/토너',this)">스킨/토너</div>
       <div class="chip" onclick="setFilter('에센스/세럼',this)">에센스/세럼</div>
       <div class="chip" onclick="setFilter('크림',this)">크림</div>
@@ -607,6 +616,8 @@ body{
         <option value="added">추가순</option>
         <option value="qty">수량순</option>
       </select>
+      <button type="button" class="btn" id="sample-select-toggle-btn" onclick="toggleSampleSelectMode()"
+        style="width:auto;padding:8px 14px;font-size:12px;flex-shrink:0;background:var(--surface2);color:var(--accent);border:1.5px solid var(--border)">🧪 샘플 지정</button>
     </div>
     <div class="product-list" id="product-list"></div>
     <div class="bulk-bar">
@@ -614,6 +625,13 @@ body{
       <div>
         <button class="b-cancel" onclick="cancelUseSelection()">취소</button>
         <button class="b-done" onclick="markUsedBulk()">사용완료 처리</button>
+      </div>
+    </div>
+    <div class="bulk-bar" id="sample-select-bar">
+      <span class="b-info" id="sample-select-info">0개 선택됨</span>
+      <div>
+        <button class="b-cancel" onclick="cancelSampleSelect()">취소</button>
+        <button class="b-done" onclick="applySampleSelection()" style="background:#6366f1">샘플 지정 완료</button>
       </div>
     </div>
   </div>
@@ -661,6 +679,10 @@ body{
       </div>
     </div>
 
+    <div class="fg set-toggle-row">
+      <label class="fl">🧪 샘플로 등록</label>
+      <button type="button" class="set-toggle-btn" id="sample-toggle-btn" onclick="toggleSampleMode()">OFF</button>
+    </div>
     <div class="fg set-toggle-row">
       <label class="fl">🎁 기획세트로 등록</label>
       <button type="button" class="set-toggle-btn" id="set-toggle-btn" onclick="toggleSetMode()">OFF</button>
@@ -1346,6 +1368,14 @@ function capClear(btn){
   input.dispatchEvent(new Event('input',{bubbles:true}));
 }
 
+let sampleMode=false;
+function setSampleMode(on){
+  sampleMode=on;
+  const btn=document.getElementById('sample-toggle-btn');
+  if(btn){btn.textContent=on?'ON':'OFF';btn.classList.toggle('on',on);}
+}
+function toggleSampleMode(){ setSampleMode(!sampleMode); }
+
 function setSetMode(on){
   setMode=on;
   const btn=document.getElementById('set-toggle-btn');
@@ -1555,6 +1585,7 @@ function closeModal(){
   document.getElementById('f-expiry').value='';
   document.getElementById('set-preview').classList.remove('show');
   setSetMode(false);
+  setSampleMode(false);
 }
 document.getElementById('modal').addEventListener('click',e=>{
   if(e.target===document.getElementById('modal'))closeModal();
@@ -1643,7 +1674,7 @@ async function addProduct(){
       closeModal();renderAll();
       showToast(`🎁 기획세트 배치 ${totalQty}개 추가됐어요! ✨`);
     }else{
-      const p2={barcode:'',name,brand,category,capacity:finalCapacity,expiry:earliest,qty:totalQty,note,batches,isSet:true,addedAt:Date.now()};
+      const p2={barcode:'',name,brand,category,capacity:finalCapacity,expiry:earliest,qty:totalQty,note,batches,isSet:true,isSample:sampleMode,addedAt:Date.now()};
       await dbAdd(p2);closeModal();renderAll();
       showToast(`🎁 기획세트 '${name}' — ${totalQty}개 배치로 저장됐어요 ✨`);
     }
@@ -1680,6 +1711,7 @@ async function addProduct(){
       qty,
       note,
       batches:[{id:'b_'+Date.now()+Math.random().toString(36).slice(2),expiry,qty}],
+      isSample:sampleMode,
       addedAt:Date.now()
     };
     await dbAdd(p);closeModal();renderAll();
@@ -1761,16 +1793,26 @@ async function deleteBatch(id,batchId){
 }
 
 
+function toggleBatchCapSame(id){
+  const same=document.getElementById(`batch-cap-same-${id}`).checked;
+  const wrap=document.getElementById(`batch-cap-wrap-${id}`);
+  if(wrap)wrap.style.display=same?'none':'block';
+}
+
 async function addBatchToProduct(id){
   const p=products.find(x=>x.id===id);if(!p)return;
   const expInput=document.getElementById(`batch-exp-${id}`);
   const expiry=parseDateInput(expInput?.value||'');
+  const sameCap=document.getElementById(`batch-cap-same-${id}`)?.checked!==false;
+  const capInput=document.getElementById(`batch-cap-${id}`);
+  const customCap=sameCap?'':(capInput?.value||'').trim();
 
   const batches=getBatches(p);
-  batches.push({id:'b_'+Date.now()+Math.random().toString(36).slice(2),expiry,qty:1});
+  batches.push({id:'b_'+Date.now()+Math.random().toString(36).slice(2),expiry,qty:1,capacity:customCap});
   const totalQty=batches.reduce((s,b)=>s+(b.qty||0),0);
   await dbUpdate(id,{batches,qty:totalQty,expiry:earliestExpiry(batches)});
   if(expInput)expInput.value='';
+  if(capInput)capInput.value='';
   renderAll();
   showToast('배치가 추가됐어요 ✨');
 }
@@ -1859,7 +1901,7 @@ function formatDateDisplay(s){
   if(d===0)return`<span class="etag etag-red">D-Day</span>`;
   if(d<=7)return`<span class="etag etag-red">D-${d}</span>`;
   if(d<=30)return`<span class="etag etag-warn">D-${d}</span>`;
-  return`<span class="etag etag-ok">${s.slice(0,7)}</span>`;
+  return`<span class="etag etag-ok">D-${d}</span>`;
 }
 function esc(s){
   return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
@@ -1917,6 +1959,7 @@ function renderDashboard(){
 function filteredSorted(){
   let list=[...products];
   if(expiryOnly)list=list.filter(p=>p.expiry);
+  if(sampleOnly)list=list.filter(p=>p.isSample);
   if(filter!=='all')list=list.filter(p=>p.category===filter);
   const q=(document.getElementById('search-input')?.value||'').toLowerCase();
   if(q)list=list.filter(p=>(p.name||'').toLowerCase().includes(q)||(p.brand||'').toLowerCase().includes(q));
@@ -1979,6 +2022,7 @@ function cardHtml(p){
         </select>
         
         ${`<span class="tag">📦 ${batches.length}개</span>`}
+        ${p.isSample?`<span class="tag" style="background:#eef2ff;color:#6366f1">🧪 샘플</span>`:''}
         ${p.note?`<span class="tag" onclick="editNoteInline('${p.id}')" style="cursor:pointer">📝 ${esc(p.note)}</span>`
           :`<span class="tag" onclick="editNoteInline('${p.id}')" style="cursor:pointer;color:var(--text3)">+ 메모</span>`}
       </div>
@@ -1988,15 +2032,34 @@ function cardHtml(p){
         </button>
         <div class="batch-list" id="${cardId}">
           ${batchRows}
-          <div class="batch-add-row">
-            <input class="fi" type="text" id="batch-exp-${p.id}" placeholder="26.08.15"
-              maxlength="10" oninput="autoFormatDate(this)" inputmode="numeric" style="flex:1">
-            <button class="btn btn-primary" onclick="addBatchToProduct('${p.id}')">+ 배치</button>
+          <div class="batch-add-row" style="flex-direction:column;align-items:stretch;gap:8px">
+            <div style="display:flex;gap:6px">
+              <input class="fi" type="text" id="batch-exp-${p.id}" placeholder="26.08.15"
+                maxlength="10" oninput="autoFormatDate(this)" inputmode="numeric" style="flex:1">
+              <button class="btn btn-primary" onclick="addBatchToProduct('${p.id}')" style="flex:none">+ 배치</button>
+            </div>
+            <label style="display:flex;align-items:center;gap:6px;font-size:12px;color:var(--text2);cursor:pointer">
+              <input type="checkbox" id="batch-cap-same-${p.id}" checked onchange="toggleBatchCapSame('${p.id}')">
+              동일 용량 사용${p.capacity?` (${esc(p.capacity)})`:''}
+            </label>
+            <div class="cap-scope" id="batch-cap-wrap-${p.id}" style="display:none">
+              <input class="fi cap-input" type="text" id="batch-cap-${p.id}" placeholder="이 배치만 다른 용량 (예: 30ml)">
+              <div class="cap-quickpad">
+                <button type="button" class="cap-btn" data-amt="100" onclick="capAdjust(this)">100</button>
+                <button type="button" class="cap-btn" data-amt="50" onclick="capAdjust(this)">50</button>
+                <button type="button" class="cap-btn" data-amt="10" onclick="capAdjust(this)">10</button>
+                <button type="button" class="cap-btn" data-amt="1" onclick="capAdjust(this)">1</button>
+                <button type="button" class="cap-btn cap-unit" data-unit="ml" onclick="capSetUnit(this)">ml</button>
+                <button type="button" class="cap-btn cap-unit" data-unit="g" onclick="capSetUnit(this)">g</button>
+                <button type="button" class="cap-btn cap-clear" onclick="capClear(this)">✕</button>
+              </div>
+            </div>
           </div>
         </div>
       `}
     </div>
     <div class="p-right">
+      ${sampleSelectMode?`<button class="sample-select-chk${selectedForSample.has(p.id)?' checked':''}" id="schk-${p.id}" onclick="toggleSampleCheck('${p.id}')" title="샘플로 선택">🧪</button>`:''}
       <button class="del-btn" onclick="deleteProduct('${p.id}')">🗑</button>
     </div>
     </div>
@@ -2262,6 +2325,7 @@ function renderInventory(){
   el.innerHTML=list.length?list.map(cardHtml).join('')
     :`<div class="empty"><div class="big">🧴</div><p>제품을 추가해보세요<br>+ 버튼을 눌러 시작하세요</p></div>`;
   syncCheckboxes();
+  updateSampleSelectBar();
 }
 function syncCheckboxes(){
   selectedForUse.forEach(key=>{
@@ -2464,14 +2528,78 @@ async function copyAllMemos(){
   }
 }
 let expiryOnly=false;
+let sampleOnly=false;
+let sampleSelectMode=false;
+let selectedForSample=new Set();
+
+function toggleSampleSelectMode(){
+  sampleSelectMode=!sampleSelectMode;
+  const btn=document.getElementById('sample-select-toggle-btn');
+  if(sampleSelectMode){
+    // 이미 샘플로 지정된 항목은 미리 체크된 상태로 시작
+    selectedForSample=new Set(filteredSorted().filter(p=>p.isSample).map(p=>p.id));
+    btn.textContent='🧪 선택 중...';
+    btn.style.background='#6366f1';btn.style.color='#fff';
+  }else{
+    selectedForSample.clear();
+    btn.textContent='🧪 샘플 지정';
+    btn.style.background='';btn.style.color='';
+  }
+  renderInventory();
+  updateSampleSelectBar();
+}
+function cancelSampleSelect(){
+  sampleSelectMode=false;
+  selectedForSample.clear();
+  const btn=document.getElementById('sample-select-toggle-btn');
+  if(btn){btn.textContent='🧪 샘플 지정';btn.style.background='';btn.style.color='';}
+  renderInventory();
+  updateSampleSelectBar();
+}
+function toggleSampleCheck(id){
+  const box=document.getElementById(`schk-${id}`);
+  if(selectedForSample.has(id)){
+    selectedForSample.delete(id);if(box)box.classList.remove('checked');
+  }else{
+    selectedForSample.add(id);if(box)box.classList.add('checked');
+  }
+  updateSampleSelectBar();
+}
+function updateSampleSelectBar(){
+  const bar=document.getElementById('sample-select-bar');
+  const info=document.getElementById('sample-select-info');
+  if(!bar)return;
+  bar.classList.toggle('show',sampleSelectMode);
+  if(info)info.textContent=`${selectedForSample.size}개 선택됨`;
+}
+async function applySampleSelection(){
+  const visible=filteredSorted();
+  const changes=visible.filter(p=>!!p.isSample!==selectedForSample.has(p.id));
+  for(const p of changes){
+    await dbUpdate(p.id,{isSample:selectedForSample.has(p.id)});
+  }
+  sampleSelectMode=false;
+  selectedForSample.clear();
+  const btn=document.getElementById('sample-select-toggle-btn');
+  if(btn){btn.textContent='🧪 샘플 지정';btn.style.background='';btn.style.color='';}
+  renderAll();
+  updateSampleSelectBar();
+  showToast(changes.length?`샘플 지정 완료! (변경 ${changes.length}개) 🧪`:'변경사항이 없어요');
+}
+
 function setFilter(f,el){
   filter=f;
-  document.querySelectorAll('.chip').forEach(c=>{ if(c.id!=='chip-expiry-only')c.classList.remove('active'); });
+  document.querySelectorAll('.chip').forEach(c=>{ if(c.id!=='chip-expiry-only'&&c.id!=='chip-sample-only')c.classList.remove('active'); });
   el.classList.add('active');renderInventory();
 }
 function toggleExpiryOnly(el){
   expiryOnly=!expiryOnly;
   el.classList.toggle('active',expiryOnly);
+  renderInventory();
+}
+function toggleSampleOnly(el){
+  sampleOnly=!sampleOnly;
+  el.classList.toggle('active',sampleOnly);
   renderInventory();
 }
 </script>
